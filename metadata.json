@@ -1,0 +1,8 @@
+{
+  "name": "Elon Musk · Greet & Meet",
+  "description": "Meet the visionary behind Tesla, SpaceX, and xAI with a dynamic photo gallery, custom image captions, Tesla Flying Car pre-orders from $10,000 to full price, and fleet ordering showroom.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
