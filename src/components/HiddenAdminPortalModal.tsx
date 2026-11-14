@@ -27,7 +27,9 @@ import {
   Percent,
   Building2,
   Wallet,
-  Gift
+  Gift,
+  HeartHandshake,
+  Globe
 } from 'lucide-react';
 import {
   TeslaOrder,
@@ -38,6 +40,8 @@ import {
   ReferralConversion,
   PaymentAccountRequest,
   AdminPaymentAccounts,
+  CharityDonationRequest,
+  CharitySupportRequest,
 } from '../types';
 import { REAL_CAR_ASSET_PRESETS } from '../data/teslaVehicles';
 
@@ -73,6 +77,12 @@ interface HiddenAdminPortalModalProps {
   onDeleteCustomCar: (carId: string) => void;
   onSendAdminReply: (messageId: string, replyText: string) => void;
   onSendSystemBroadcast: (subject: string, body: string) => void;
+  charityDonations?: CharityDonationRequest[];
+  charitySupportRequests?: CharitySupportRequest[];
+  onApproveCharityDonation?: (donationId: string, notes?: string) => void;
+  onRejectCharityDonation?: (donationId: string, reason?: string) => void;
+  onApproveCharitySupport?: (requestId: string, notes?: string, provisionedAccount?: string) => void;
+  onRejectCharitySupport?: (requestId: string, reason?: string) => void;
 }
 
 export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
@@ -105,12 +115,20 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
   onDeleteCustomCar,
   onSendAdminReply,
   onSendSystemBroadcast,
+  charityDonations = [],
+  charitySupportRequests = [],
+  onApproveCharityDonation,
+  onRejectCharityDonation,
+  onApproveCharitySupport,
+  onRejectCharitySupport,
 }) => {
   const [activeTab, setActiveTab] = useState<'approvals' | 'accounts' | 'add_car' | 'messages' | 'fleet' | 'referrals'>('approvals');
-  const [approvalCategory, setApprovalCategory] = useState<'vehicles' | 'shares' | 'vip'>('vehicles');
+  const [approvalCategory, setApprovalCategory] = useState<'vehicles' | 'shares' | 'vip' | 'charity'>('vehicles');
   const [approvalNotes, setApprovalNotes] = useState<{ [orderId: string]: string }>({});
   const [shareApprovalNotes, setShareApprovalNotes] = useState<{ [orderId: string]: string }>({});
   const [vipApprovalNotes, setVipApprovalNotes] = useState<{ [ticketId: string]: string }>({});
+  const [charityNotes, setCharityNotes] = useState<{ [id: string]: string }>({});
+  const [supportAccountDrafts, setSupportAccountDrafts] = useState<{ [id: string]: string }>({});
   const [accountDrafts, setAccountDrafts] = useState<{ [reqId: string]: string }>({});
   const [wireDetailsInput, setWireDetailsInput] = useState<string>(adminPaymentAccounts.wireDetails || '');
   const [giftCardInstructionsInput, setGiftCardInstructionsInput] = useState<string>(adminPaymentAccounts.giftCardInstructions || '');
@@ -278,7 +296,28 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
   const totalApprovedCommission = approvedReferrals.reduce((sum, r) => sum + r.commissionEarned, 0);
   const totalPendingCommission = pendingReferrals.reduce((sum, r) => sum + r.commissionEarned, 0);
 
-  const totalPending = pendingOrders.length + pendingShareOrders.length + pendingVipRequests.length;
+  const pendingCharityDonations = charityDonations.filter((d) => !d.status || d.status === 'pending_admin_approval');
+  const approvedCharityDonations = charityDonations.filter((d) => d.status === 'approved');
+  const pendingCharitySupport = charitySupportRequests.filter((s) => !s.status || s.status === 'pending_admin_approval');
+  const approvedCharitySupport = charitySupportRequests.filter((s) => s.status === 'approved');
+  const pendingCharityTotal = pendingCharityDonations.length + pendingCharitySupport.length;
+
+  const totalPending =
+    pendingOrders.length + pendingShareOrders.length + pendingVipRequests.length + pendingCharityTotal;
+
+  const filteredCharityDonations = charityDonations.filter((d) => {
+    if (approvalFilter === 'pending') return !d.status || d.status === 'pending_admin_approval';
+    if (approvalFilter === 'approved') return d.status === 'approved';
+    if (approvalFilter === 'rejected') return d.status === 'rejected';
+    return true;
+  });
+
+  const filteredCharitySupport = charitySupportRequests.filter((s) => {
+    if (approvalFilter === 'pending') return !s.status || s.status === 'pending_admin_approval';
+    if (approvalFilter === 'approved') return s.status === 'approved';
+    if (approvalFilter === 'rejected') return s.status === 'rejected';
+    return true;
+  });
 
   const filteredOrders = orders.filter((o) => {
     if (approvalFilter === 'pending') return !o.paymentStatus || o.paymentStatus === 'pending_admin_approval';
@@ -551,6 +590,24 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                   </span>
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={() => setApprovalCategory('charity')}
+                className={`flex-1 min-w-[170px] py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                  approvalCategory === 'charity'
+                    ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <HeartHandshake className="w-4 h-4" />
+                <span>Charity &amp; Support ({charityDonations.length + charitySupportRequests.length})</span>
+                {pendingCharityTotal > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-950 border border-rose-400/50 text-rose-200 font-mono tabular-nums font-bold">
+                    {pendingCharityTotal} pending
+                  </span>
+                )}
+              </button>
             </div>
 
             {/* Summary Counters */}
@@ -564,14 +621,18 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                     ? pendingOrders.length
                     : approvalCategory === 'shares'
                     ? pendingShareOrders.length
-                    : pendingVipRequests.length}
+                    : approvalCategory === 'vip'
+                    ? pendingVipRequests.length
+                    : pendingCharityTotal}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">
                   {approvalCategory === 'vehicles'
                     ? 'Direct payment review required before VIN allocation'
                     : approvalCategory === 'shares'
                     ? 'Review incoming wire/ACH to issue Delaware share certificate'
-                    : 'Review VIP Greet & Meet clearance and plaque issuance'}
+                    : approvalCategory === 'vip'
+                    ? 'Review VIP Greet & Meet clearance and plaque issuance'
+                    : 'Charity NGO donations & war/terrorism support requests awaiting approval'}
                 </div>
               </div>
 
@@ -584,7 +645,9 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                     ? approvedOrders.length
                     : approvalCategory === 'shares'
                     ? approvedShareOrders.length
-                    : approvedVipRequests.length}
+                    : approvalCategory === 'vip'
+                    ? approvedVipRequests.length
+                    : approvedCharityDonations.length + approvedCharitySupport.length}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">
                   Verified orders with dispatched in-app notifications
@@ -597,7 +660,9 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                     ? 'Total Fleet Orders'
                     : approvalCategory === 'shares'
                     ? 'Total TSLA Share Allocations'
-                    : 'Total VIP Pass Requests'}
+                    : approvalCategory === 'vip'
+                    ? 'Total VIP Pass Requests'
+                    : 'Total Charity & Support Filings'}
                 </div>
                 <div className="text-2xl font-bold font-mono tabular-nums text-white mt-1">
                   {approvalCategory === 'vehicles'
@@ -1133,6 +1198,278 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                     })}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Charity NGO Donations & Country Support Requests View */}
+            {approvalCategory === 'charity' && (
+              <div className="space-y-6">
+                {/* Support Requests Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between border-b border-blue-900/60 pb-2">
+                    <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-rose-400" />
+                      <span>Humanitarian &amp; Country Support Requests ({filteredCharitySupport.length})</span>
+                    </h4>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      Elon Musk Management Approval &amp; Accounts Provision
+                    </span>
+                  </div>
+
+                  {filteredCharitySupport.length === 0 ? (
+                    <div className="p-8 text-center rounded-2xl bg-[#08142b] border border-blue-900/60 text-slate-400 text-xs">
+                      No humanitarian support requests matching the &ldquo;{approvalFilter}&rdquo; filter.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredCharitySupport.map((req) => {
+                        const isPending = !req.status || req.status === 'pending_admin_approval';
+                        const isApproved = req.status === 'approved';
+                        return (
+                          <div
+                            key={req.requestId}
+                            className={`p-5 rounded-2xl border space-y-3 ${
+                              isPending
+                                ? 'bg-gradient-to-r from-rose-950/25 via-blue-950/20 to-[#08142b] border-rose-500/45'
+                                : isApproved
+                                ? 'bg-[#08142b] border-emerald-500/40'
+                                : 'bg-[#050d20] border-blue-900/50'
+                            }`}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-blue-900/50">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400">
+                                  <span className="text-blue-300 font-bold">{req.requestId}</span>
+                                  <span>·</span>
+                                  <span>{req.dateStr}</span>
+                                  <span>·</span>
+                                  <span className="text-rose-300 font-semibold">{req.crisisType}</span>
+                                </div>
+                                <h5 className="font-display font-bold text-base text-white mt-0.5">
+                                  {req.countryName} ({req.cityOrZone}) — {req.aidCategory}
+                                </h5>
+                                <div className="text-xs text-slate-300">
+                                  Applicant: <strong className="text-white">{req.applicantName}</strong> ({req.applicantEmail})
+                                  {req.organizationName ? ` · ${req.organizationName}` : ''}
+                                  {req.requestedAmountUsd ? (
+                                    <span className="ml-2 font-mono text-emerald-300 tabular-nums">
+                                      Grant Requested: ${req.requestedAmountUsd.toLocaleString()}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </div>
+
+                              <span
+                                className={`text-xs font-mono font-bold self-start ${
+                                  isPending
+                                    ? 'text-amber-300'
+                                    : isApproved
+                                    ? 'text-emerald-400'
+                                    : 'text-red-400'
+                                }`}
+                              >
+                                {isPending
+                                  ? 'Pending Management Approval'
+                                  : isApproved
+                                  ? 'Approved by Management'
+                                  : 'Declined'}
+                              </span>
+                            </div>
+
+                            <p className="text-xs text-slate-300 leading-relaxed">
+                              {req.situationSummary}
+                            </p>
+
+                            {isPending ? (
+                              <div className="pt-2 border-t border-blue-900/50 space-y-2.5">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                                  <input
+                                    type="text"
+                                    placeholder="Management clearance note (sent to applicant inbox)..."
+                                    value={charityNotes[req.requestId] || ''}
+                                    onChange={(e) =>
+                                      setCharityNotes((prev) => ({ ...prev, [req.requestId]: e.target.value }))
+                                    }
+                                    className="px-3 py-2 rounded-lg bg-[#040a18] border border-blue-900/70 text-xs text-white focus:outline-none focus:border-blue-400 placeholder:text-slate-500"
+                                  />
+                                  <input
+                                    type="text"
+                                    placeholder={
+                                      req.needsAccountProvisioning
+                                        ? `Provision ${req.preferredPayoutMethod?.toUpperCase() || 'relief'} settlement account / voucher code...`
+                                        : 'Optional relief tracking or dispatch account reference...'
+                                    }
+                                    value={supportAccountDrafts[req.requestId] || ''}
+                                    onChange={(e) =>
+                                      setSupportAccountDrafts((prev) => ({ ...prev, [req.requestId]: e.target.value }))
+                                    }
+                                    className="px-3 py-2 rounded-lg bg-[#040a18] border border-blue-900/70 text-xs font-mono text-white focus:outline-none focus:border-blue-400 placeholder:text-slate-500"
+                                  />
+                                </div>
+                                <div className="flex flex-wrap items-center justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onRejectCharitySupport?.(req.requestId, charityNotes[req.requestId])
+                                    }
+                                    className="px-3.5 py-2 rounded-xl bg-[#040a18] border border-blue-900/70 hover:border-red-500/50 text-slate-300 text-xs font-semibold cursor-pointer"
+                                  >
+                                    Decline Request
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onApproveCharitySupport?.(
+                                        req.requestId,
+                                        charityNotes[req.requestId],
+                                        supportAccountDrafts[req.requestId]?.trim() || undefined
+                                      )
+                                    }
+                                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-emerald-600 hover:brightness-110 text-white text-xs font-bold cursor-pointer flex items-center gap-1.5"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                    <span>Approve Support &amp; Provision Account</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="pt-2 border-t border-blue-900/50 space-y-1 text-[11px] font-mono text-slate-400">
+                                {req.provisionedAccountDetails && (
+                                  <div className="text-emerald-300 break-all">
+                                    Provisioned Account: {req.provisionedAccountDetails}
+                                  </div>
+                                )}
+                                <div>{req.approvalNotes || 'Reviewed by Elon Musk Official Management Table'}</div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Fan Charity Donations Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between border-b border-blue-900/60 pb-2">
+                    <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                      <HeartHandshake className="w-4 h-4 text-blue-400" />
+                      <span>Fan NGO Charity Donations ({filteredCharityDonations.length})</span>
+                    </h4>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      Settlement Verification &amp; Official Receipt Issuance
+                    </span>
+                  </div>
+
+                  {filteredCharityDonations.length === 0 ? (
+                    <div className="p-8 text-center rounded-2xl bg-[#08142b] border border-blue-900/60 text-slate-400 text-xs">
+                      No fan charity donations matching the &ldquo;{approvalFilter}&rdquo; filter.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredCharityDonations.map((don) => {
+                        const isPending = !don.status || don.status === 'pending_admin_approval';
+                        const isApproved = don.status === 'approved';
+                        return (
+                          <div
+                            key={don.donationId}
+                            className={`p-5 rounded-2xl border space-y-3 ${
+                              isPending
+                                ? 'bg-gradient-to-r from-blue-950/30 via-[#08142b] to-red-950/20 border-red-500/45'
+                                : isApproved
+                                ? 'bg-[#08142b] border-emerald-500/40'
+                                : 'bg-[#050d20] border-blue-900/50'
+                            }`}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-blue-900/50">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400">
+                                  <span className="text-blue-300 font-bold">{don.donationId}</span>
+                                  <span>·</span>
+                                  <span>{don.dateStr}</span>
+                                  <span>·</span>
+                                  <span>{don.paymentReference}</span>
+                                  <span>·</span>
+                                  <span className="uppercase">{don.paymentMethod}</span>
+                                </div>
+                                <h5 className="font-display font-bold text-base text-white mt-0.5">
+                                  {don.ngoSectionName} —{' '}
+                                  <span className="font-mono text-emerald-300 tabular-nums">
+                                    ${don.amountUsd.toLocaleString()} USD
+                                  </span>
+                                </h5>
+                                <div className="text-xs text-slate-300">
+                                  Donor: <strong className="text-white">{don.donorName}</strong> ({don.donorEmail}) · Target:{' '}
+                                  <strong className="text-blue-200">{don.countryName}</strong> ({don.crisisType})
+                                </div>
+                                {don.dedicationNote && (
+                                  <div className="text-[11px] text-slate-400 italic mt-0.5">
+                                    Note: &ldquo;{don.dedicationNote}&rdquo;
+                                  </div>
+                                )}
+                              </div>
+
+                              <span
+                                className={`text-xs font-mono font-bold self-start ${
+                                  isPending
+                                    ? 'text-amber-300'
+                                    : isApproved
+                                    ? 'text-emerald-400'
+                                    : 'text-red-400'
+                                }`}
+                              >
+                                {isPending
+                                  ? 'Pending Admin Approval'
+                                  : isApproved
+                                  ? 'Approved Donation'
+                                  : 'Rejected'}
+                              </span>
+                            </div>
+
+                            {isPending ? (
+                              <div className="pt-2 border-t border-blue-900/50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                                <input
+                                  type="text"
+                                  placeholder="Optional approval note or official NGO receipt dispatch message..."
+                                  value={charityNotes[don.donationId] || ''}
+                                  onChange={(e) =>
+                                    setCharityNotes((prev) => ({ ...prev, [don.donationId]: e.target.value }))
+                                  }
+                                  className="flex-1 px-3 py-1.5 rounded-lg bg-[#040a18] border border-blue-900/70 text-xs text-white focus:outline-none focus:border-blue-400 placeholder:text-slate-500"
+                                />
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onRejectCharityDonation?.(don.donationId, charityNotes[don.donationId])
+                                    }
+                                    className="px-3.5 py-2 rounded-xl bg-[#040a18] border border-blue-900/70 hover:border-red-500/50 text-slate-300 text-xs font-semibold cursor-pointer"
+                                  >
+                                    Reject
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onApproveCharityDonation?.(don.donationId, charityNotes[don.donationId])
+                                    }
+                                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-emerald-600 hover:brightness-110 text-white text-xs font-bold cursor-pointer flex items-center gap-1.5"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                    <span>Approve Donation &amp; Issue Receipt</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] font-mono text-slate-400">
+                                {don.approvalNotes || 'Approved by Elon Musk Official Management Table'}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

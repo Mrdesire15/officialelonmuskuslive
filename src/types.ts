@@ -204,7 +204,7 @@ export interface InAppInboxMessage {
   timestamp: string;
   timeStr: string;
   read: boolean;
-  category: 'payment_approval' | 'order_update' | 'vip_concierge' | 'price_alert' | 'general';
+  category: 'payment_approval' | 'order_update' | 'vip_concierge' | 'price_alert' | 'charity_ngo' | 'general';
   orderId?: string;
   replies?: InAppReply[];
 }
@@ -333,6 +333,7 @@ export interface PaymentAccountRequest {
   visitorName: string;
   visitorEmail: string;
   note?: string;
+  requestCategory?: 'vehicle' | 'charity_donation' | 'charity_support';
   status: 'pending_admin' | 'issued';
   issuedAccountDetails?: string;
   requestedAt: string;
@@ -347,6 +348,78 @@ export interface AdminPaymentAccounts {
   updatedAt?: string;
 }
 
+export interface CharityNgoSection {
+  id: string;
+  name: string;
+  division: string;
+  focus: string;
+  description: string;
+  impactMetric: string;
+  leadProgram: string;
+}
+
+export type CrisisCategory = 'War & Armed Conflict' | 'Terrorism & Insurgency' | 'War & Terrorism Recovery';
+
+export interface CrisisCountry {
+  id: string;
+  name: string;
+  region: 'Europe & Eurasia' | 'Middle East' | 'Africa' | 'Asia-Pacific' | 'Americas' | 'Global';
+  crisisType: CrisisCategory;
+  urgentNeeds: string;
+  activeNgoSectionId: string;
+  displacedEstimate: string;
+}
+
+export interface CharityDonationRequest {
+  donationId: string;
+  ngoSectionId: string;
+  ngoSectionName: string;
+  countryId: string;
+  countryName: string;
+  crisisType: string;
+  amountUsd: number;
+  paymentMethod: 'wire' | 'gift_card' | 'crypto';
+  paymentReference: string;
+  donorName: string;
+  donorEmail: string;
+  donorCountry?: string;
+  dedicationNote?: string;
+  status: 'pending_admin_approval' | 'approved' | 'rejected';
+  submittedAt: string;
+  dateStr: string;
+  approvalNotes?: string;
+  approvedAt?: string;
+}
+
+export interface CharitySupportRequest {
+  requestId: string;
+  ngoSectionId: string;
+  ngoSectionName: string;
+  countryId: string;
+  countryName: string;
+  crisisType: CrisisCategory;
+  aidCategory:
+    | 'Starlink Crisis Connectivity'
+    | 'Tesla Solar & Powerwall Aid'
+    | 'Medical & Trauma Relief'
+    | 'Emergency Food & Water'
+    | 'Financial Relief Grant';
+  requestedAmountUsd?: number;
+  applicantName: string;
+  applicantEmail: string;
+  applicantPhone?: string;
+  organizationName?: string;
+  cityOrZone: string;
+  situationSummary: string;
+  needsAccountProvisioning: boolean;
+  preferredPayoutMethod?: 'wire' | 'gift_card' | 'crypto';
+  provisionedAccountDetails?: string;
+  status: 'pending_admin_approval' | 'approved' | 'rejected';
+  submittedAt: string;
+  dateStr: string;
+  approvalNotes?: string;
+  approvedAt?: string;
+}
 
 export type PageId = 'executive' | 'enterprises' | 'flying-roadster' | 'showroom' | 'shares' | 'gallery';
 

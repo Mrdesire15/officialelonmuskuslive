@@ -103,6 +103,12 @@ export const InAppInboxModal: React.FC<InAppInboxModalProps> = ({
             Price Alert
           </span>
         );
+      case 'charity_ngo':
+        return (
+          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-600/25 text-rose-200 border border-rose-400/60">
+            Charity NGO
+          </span>
+        );
       default:
         return (
           <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#0b1b3a] text-slate-200 border border-blue-800/70">
@@ -211,6 +217,16 @@ export const InAppInboxModal: React.FC<InAppInboxModalProps> = ({
                 }`}
               >
                 Alerts
+              </button>
+              <button
+                onClick={() => setFilterCategory('charity_ngo')}
+                className={`px-2.5 py-1 rounded-lg font-mono transition-colors cursor-pointer whitespace-nowrap ${
+                  filterCategory === 'charity_ngo'
+                    ? 'bg-rose-600 text-white font-bold'
+                    : 'text-slate-300 hover:text-white bg-[#08142b]'
+                }`}
+              >
+                Charity NGO
               </button>
             </div>
 

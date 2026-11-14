@@ -5,11 +5,13 @@ import { PageId } from '../types';
 interface FooterProps {
   onOpenRsvp: () => void;
   onSelectPage?: (page: PageId) => void;
+  onOpenCharity?: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onOpenRsvp,
   onSelectPage,
+  onOpenCharity,
 }) => {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -51,7 +53,7 @@ export const Footer: React.FC<FooterProps> = ({
                 Elon Musk Official Management Table
               </div>
               <div className="text-[11px] text-slate-400 leading-relaxed">
-                All VIP pass requests, vehicle reservations, and settlement requests are sent directly to the Elon Musk Official Management Table for account provisioning and verification.
+                All VIP pass requests, vehicle reservations, charity donations, support appeals, and settlement requests are sent directly to the Elon Musk Official Management Table for approval and account provisioning.
               </div>
             </div>
           </div>
@@ -67,6 +69,14 @@ export const Footer: React.FC<FooterProps> = ({
               >
                 VIP Passes ($1k–$10k)
               </button>
+              {onOpenCharity && (
+                <button
+                  onClick={onOpenCharity}
+                  className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 text-rose-200 border border-rose-500/45 text-xs transition-colors cursor-pointer"
+                >
+                  Charity NGO &amp; Relief
+                </button>
+              )}
               <button
                 onClick={scrollToTop}
                 className="px-3 py-1.5 rounded-lg bg-[#08152e] hover:bg-blue-900/50 text-slate-300 hover:text-white border border-blue-800/60 text-xs transition-colors cursor-pointer flex items-center gap-1"

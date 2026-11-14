@@ -18,7 +18,8 @@ import {
   ShieldAlert,
   TrendingUp,
   DollarSign,
-  Percent
+  Percent,
+  HeartHandshake
 } from 'lucide-react';
 import { PageId, PageDefinition } from '../types';
 import { PAGES_CONFIG } from '../data/pagesData';
@@ -40,6 +41,7 @@ interface NavbarProps {
   onToggleViewMode: () => void;
   onOpenReferralModal?: () => void;
   commissionPercent?: number;
+  onOpenCharity?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -59,6 +61,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleViewMode,
   onOpenReferralModal,
   commissionPercent = 5,
+  onOpenCharity,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const logoTapCountRef = useRef(0);
@@ -231,6 +234,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>VIP Pass</span>
               </button>
 
+              {/* Charity NGO Base Button */}
+              {onOpenCharity && (
+                <button
+                  onClick={onOpenCharity}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border border-rose-500/50 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25 hover:text-white transition-all cursor-pointer shadow-sm font-sans whitespace-nowrap shrink-0"
+                  title="Donate to Official Elon Musk Charity NGO Sections or Request Country Relief Support"
+                >
+                  <HeartHandshake className="w-3.5 h-3.5 text-rose-300" />
+                  <span>Charity</span>
+                </button>
+              )}
+
               {/* Referral Earn % Key */}
               {onOpenReferralModal && (
                 <button
@@ -374,6 +389,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               Pre-Order Car
             </button>
+            {onOpenCharity && (
+              <button
+                onClick={() => {
+                  onOpenCharity();
+                  setMobileMenuOpen(false);
+                }}
+                className="py-2.5 px-3 rounded-xl bg-rose-500/20 border border-rose-500/50 text-rose-100 text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <HeartHandshake className="w-3.5 h-3.5 text-rose-300" />
+                <span>Charity NGO &amp; Country Support</span>
+              </button>
+            )}
             {onOpenReferralModal && (
               <button
                 onClick={() => {

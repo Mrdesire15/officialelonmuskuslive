@@ -12,7 +12,8 @@ import {
   ExternalLink,
   Crown,
   Layers,
-  Percent
+  Percent,
+  HeartHandshake
 } from 'lucide-react';
 import { ProfileData, PageId } from '../types';
 import { FAMOUS_QUOTES } from '../data/initialData';
@@ -26,6 +27,7 @@ interface HeroSectionProps {
   commissionPercent?: number;
   referralEarnedUsd?: number;
   onOpenReferralModal?: () => void;
+  onOpenCharity?: () => void;
 }
 
 export const HeroSection: React.FC<HeroSectionProps> = ({
@@ -37,6 +39,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   commissionPercent = 5,
   referralEarnedUsd = 0,
   onOpenReferralModal,
+  onOpenCharity,
 }) => {
   const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
   const [copiedRefCode, setCopiedRefCode] = useState(false);
@@ -207,6 +210,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 <Award className="w-4 h-4 text-white" />
                 <span>Reserve VIP Experience Pass ($1k–$10k)</span>
               </button>
+
+              {onOpenCharity && (
+                <button
+                  type="button"
+                  onClick={onOpenCharity}
+                  className="px-4 py-3 rounded-xl border border-rose-500/55 hover:border-rose-400 bg-rose-950/50 hover:bg-rose-900/50 text-rose-100 hover:text-white text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 shadow-md"
+                >
+                  <HeartHandshake className="w-4 h-4 text-rose-300" />
+                  <span>Donate to Official Charity NGO</span>
+                </button>
+              )}
 
               <button
                 onClick={() => {

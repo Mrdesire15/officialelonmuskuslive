@@ -26,6 +26,8 @@ import {
   ReferralConversion,
   PaymentAccountRequest,
   AdminPaymentAccounts,
+  CharityDonationRequest,
+  CharitySupportRequest,
   PageId
 } from './types';
 import { PAGES_CONFIG } from './data/pagesData';
@@ -50,6 +52,7 @@ import { HiddenAdminPortalModal } from './components/HiddenAdminPortalModal';
 import { TeslaSharePurchaseModal } from './components/TeslaSharePurchaseModal';
 import { ShareCertificateModal } from './components/ShareCertificateModal';
 import { ReferralModal } from './components/ReferralModal';
+import { CharityDonationModal } from './components/CharityDonationModal';
 import { Footer } from './components/Footer';
 
 const STORAGE_KEYS = {
@@ -69,6 +72,8 @@ const STORAGE_KEYS = {
   REFERRAL_CONVERSIONS: 'elon_meet_referral_conversions_v1',
   ACCOUNT_REQUESTS: 'elon_meet_account_requests_v1',
   ADMIN_PAYMENT_ACCOUNTS: 'elon_meet_admin_payment_accounts_v1',
+  CHARITY_DONATIONS: 'elon_meet_charity_donations_v1',
+  CHARITY_SUPPORT: 'elon_meet_charity_support_v1',
 };
 
 function generateVisitorReferralCode(): string {
@@ -310,6 +315,24 @@ export default function App() {
     }
   });
 
+  const [charityDonations, setCharityDonations] = useState<CharityDonationRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CHARITY_DONATIONS);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [charitySupportRequests, setCharitySupportRequests] = useState<CharitySupportRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CHARITY_SUPPORT);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   // Modal control states
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [editingItem, setEditingItem] = useState<GalleryImageData | null>(null);
@@ -322,6 +345,7 @@ export default function App() {
   const [isAdminPortalOpen, setIsAdminPortalOpen] = useState<boolean>(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [isReferralModalOpen, setIsReferralModalOpen] = useState<boolean>(false);
+  const [isCharityOpen, setIsCharityOpen] = useState<boolean>(false);
   const [shareModalInitialQty, setShareModalInitialQty] = useState<number>(25);
   const [selectedShareCertOrder, setSelectedShareCertOrder] = useState<TeslaShareOrder | null>(null);
 
@@ -499,6 +523,22 @@ export default function App() {
       console.warn('LocalStorage save failed for admin payment accounts', e);
     }
   }, [adminPaymentAccounts]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CHARITY_DONATIONS, JSON.stringify(charityDonations));
+    } catch (e) {
+      console.warn('LocalStorage save failed for charity donations', e);
+    }
+  }, [charityDonations]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CHARITY_SUPPORT, JSON.stringify(charitySupportRequests));
+    } catch (e) {
+      console.warn('LocalStorage save failed for charity support requests', e);
+    }
+  }, [charitySupportRequests]);
 
   // Simulated Market Feed Interval (ticks price every 2.2s when running)
   useEffect(() => {
@@ -1341,6 +1381,7 @@ export default function App() {
     visitorName: string;
     visitorEmail: string;
     note?: string;
+    requestCategory?: 'vehicle' | 'charity_donation' | 'charity_support';
   }): PaymentAccountRequest => {
     const now = new Date();
     const prefix = payload.paymentMethod === 'gift_card' ? 'GIFT' : payload.paymentMethod.toUpperCase();
@@ -1352,6 +1393,7 @@ export default function App() {
       visitorName: payload.visitorName,
       visitorEmail: payload.visitorEmail,
       note: payload.note,
+      requestCategory: payload.requestCategory || 'vehicle',
       status: 'pending_admin',
       requestedAt: now.toISOString(),
       timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -1370,8 +1412,8 @@ export default function App() {
       sender: 'concierge',
       senderName: 'Elon Musk Official Management Table',
       subject: `Payment Account Requested (${req.id}): ${methodLabel}`,
-      body: `Your request for ${methodLabel} details has been sent to the Elon Musk Official Management Table for account provisioning.\n\nVehicle: ${payload.vehicleName}\nAmount Due: $${payload.amountDue.toLocaleString()} USD\nVisitor: ${payload.visitorName} (${payload.visitorEmail})${payload.note ? `\nNote: ${payload.note}` : ''}\n\nOnce the Management Table provisions your private settlement account, it will arrive here in your In-App Inbox and unlock inside your checkout screen.`,
-      category: 'payment_approval',
+      body: `Your request for ${methodLabel} details has been sent to the Elon Musk Official Management Table for account provisioning.\n\nAllocation / Purpose: ${payload.vehicleName}\nAmount Due: $${payload.amountDue.toLocaleString()} USD\nVisitor: ${payload.visitorName} (${payload.visitorEmail})${payload.note ? `\nNote: ${payload.note}` : ''}\n\nOnce the Management Table provisions your private settlement account, it will arrive here in your In-App Inbox and unlock inside your portal.`,
+      category: payload.requestCategory && payload.requestCategory !== 'vehicle' ? 'charity_ngo' : 'payment_approval',
       read: false,
       timestamp: now.toISOString(),
       timeStr: 'Just now',
@@ -1426,6 +1468,183 @@ export default function App() {
 
   const handleSaveAdminPaymentAccounts = (nextAccounts: AdminPaymentAccounts) => {
     setAdminPaymentAccounts(nextAccounts);
+  };
+
+  // Charity NGO Donation & Country Support Request handlers (directed to Admin & Elon Musk Management)
+  const handleSubmitCharityDonation = (donation: CharityDonationRequest) => {
+    setCharityDonations((prev) => [donation, ...prev]);
+
+    const donationNoticeMsg: InAppInboxMessage = {
+      id: `msg-char-don-${Date.now()}`,
+      sender: 'concierge',
+      senderName: 'Elon Musk Official Management Table · Charity & NGO Desk',
+      subject: `Charity Donation Submitted (${donation.donationId}): ${donation.countryName}`,
+      body: `Thank you, ${donation.donorName}. Your humanitarian donation of $${donation.amountUsd.toLocaleString()} USD to ${donation.ngoSectionName} designated for ${donation.countryName} (${donation.crisisType}) has been sent to the Elon Musk Official Management Table for admin verification, settlement account provisioning, and official NGO receipt issuance.\n\nPayment Reference: ${donation.paymentReference}\nChannel: ${donation.paymentMethod.toUpperCase()}`,
+      category: 'charity_ngo',
+      read: false,
+      timestamp: donation.submittedAt,
+      timeStr: 'Just now',
+      replies: [],
+    };
+    setInboxMessages((prev) => [donationNoticeMsg, ...prev]);
+  };
+
+  const handleApproveCharityDonation = (donationId: string, notes?: string) => {
+    const target = charityDonations.find((d) => d.donationId === donationId);
+    if (!target) return;
+
+    const nowIso = new Date().toISOString();
+    setCharityDonations((prev) =>
+      prev.map((d) =>
+        d.donationId === donationId
+          ? {
+              ...d,
+              status: 'approved',
+              approvedAt: nowIso,
+              approvalNotes: notes || 'Verified and allocated by Elon Musk Official Management Table.',
+            }
+          : d
+      )
+    );
+
+    const apprMsg: InAppInboxMessage = {
+      id: `msg-char-don-appr-${Date.now()}`,
+      sender: 'admin',
+      senderName: 'Elon Musk Official Management Table · Charity & NGO Desk',
+      subject: `Charity Donation APPROVED (${target.donationId}): $${target.amountUsd.toLocaleString()}`,
+      body: `Official Philanthropic Clearance: Your donation of $${target.amountUsd.toLocaleString()} USD to ${target.ngoSectionName} for ${target.countryName} has been APPROVED by the Elon Musk Official Management Table.\n\nDonation ID: ${target.donationId}\nReference: ${target.paymentReference}${notes ? `\nManagement Note: ${notes}` : ''}\n\nFunds have been cleared for direct humanitarian relief deployment.`,
+      category: 'charity_ngo',
+      read: false,
+      timestamp: nowIso,
+      timeStr: 'Just now',
+      replies: [],
+    };
+    setInboxMessages((prev) => [apprMsg, ...prev]);
+  };
+
+  const handleRejectCharityDonation = (donationId: string, reason?: string) => {
+    const target = charityDonations.find((d) => d.donationId === donationId);
+    if (!target) return;
+
+    setCharityDonations((prev) =>
+      prev.map((d) =>
+        d.donationId === donationId
+          ? { ...d, status: 'rejected', approvalNotes: reason || 'Settlement verification required.' }
+          : d
+      )
+    );
+
+    const rejMsg: InAppInboxMessage = {
+      id: `msg-char-don-rej-${Date.now()}`,
+      sender: 'admin',
+      senderName: 'Elon Musk Official Management Table · Charity & NGO Desk',
+      subject: `Charity Donation Update (${target.donationId})`,
+      body: `Your charity donation filing (${target.donationId}) requires further settlement verification.\n\nReason: ${reason || 'Please reply with updated transfer confirmation so the Management Table can re-verify.'}`,
+      category: 'charity_ngo',
+      read: false,
+      timestamp: new Date().toISOString(),
+      timeStr: 'Just now',
+      replies: [],
+    };
+    setInboxMessages((prev) => [rejMsg, ...prev]);
+  };
+
+  const handleSubmitCharitySupportRequest = (request: CharitySupportRequest) => {
+    setCharitySupportRequests((prev) => [request, ...prev]);
+
+    // If account provisioning is requested, also enqueue a PaymentAccountRequest directly for the Admin Portal Accounts tab
+    if (request.needsAccountProvisioning && request.preferredPayoutMethod) {
+      const prefix = request.preferredPayoutMethod === 'gift_card' ? 'GIFT' : request.preferredPayoutMethod.toUpperCase();
+      const accReq: PaymentAccountRequest = {
+        id: `ACC-${prefix}-${Date.now().toString().slice(-5)}`,
+        paymentMethod: request.preferredPayoutMethod,
+        vehicleName: `NGO Support Grant (${request.requestId}): ${request.countryName} · ${request.aidCategory}`,
+        amountDue: request.requestedAmountUsd || 0,
+        visitorName: request.applicantName,
+        visitorEmail: request.applicantEmail,
+        note: `${request.crisisType} · ${request.cityOrZone}`,
+        requestCategory: 'charity_support',
+        status: 'pending_admin',
+        requestedAt: request.submittedAt,
+        timeStr: 'Just now',
+      };
+      setPaymentAccountRequests((prev) => [accReq, ...prev]);
+    }
+
+    const supNoticeMsg: InAppInboxMessage = {
+      id: `msg-char-sup-${Date.now()}`,
+      sender: 'concierge',
+      senderName: 'Elon Musk Official Management Table · Humanitarian Relief',
+      subject: `Support Request Submitted (${request.requestId}): ${request.countryName}`,
+      body: `Your humanitarian support request for ${request.countryName} (${request.cityOrZone}) under ${request.ngoSectionName} has been sent directly to the Admin and Elon Musk Management for approval and accounts provision.\n\nAid Type: ${request.aidCategory}\nCrisis Category: ${request.crisisType}${request.requestedAmountUsd ? `\nRequested Grant: $${request.requestedAmountUsd.toLocaleString()} USD` : ''}\n\nYou will be notified here in your In-App Inbox once Elon Musk Management approves your request and provisions your relief account.`,
+      category: 'charity_ngo',
+      read: false,
+      timestamp: request.submittedAt,
+      timeStr: 'Just now',
+      replies: [],
+    };
+    setInboxMessages((prev) => [supNoticeMsg, ...prev]);
+  };
+
+  const handleApproveCharitySupportRequest = (requestId: string, notes?: string, provisionedAccount?: string) => {
+    const target = charitySupportRequests.find((s) => s.requestId === requestId);
+    if (!target) return;
+
+    const nowIso = new Date().toISOString();
+    setCharitySupportRequests((prev) =>
+      prev.map((s) =>
+        s.requestId === requestId
+          ? {
+              ...s,
+              status: 'approved',
+              approvedAt: nowIso,
+              provisionedAccountDetails: provisionedAccount || s.provisionedAccountDetails,
+              approvalNotes: notes || 'Approved by Elon Musk Management & NGO Relief Operations.',
+            }
+          : s
+      )
+    );
+
+    const apprMsg: InAppInboxMessage = {
+      id: `msg-char-sup-appr-${Date.now()}`,
+      sender: 'admin',
+      senderName: 'Elon Musk Official Management Table · Humanitarian Relief',
+      subject: `Humanitarian Support APPROVED (${target.requestId}): ${target.countryName}`,
+      body: `Official Approval Notice: Your support request for ${target.countryName} (${target.cityOrZone}) has been APPROVED by Elon Musk Management.\n\nAid Allocation: ${target.aidCategory}\nNGO Division: ${target.ngoSectionName}${provisionedAccount ? `\n\nProvisioned Relief Account / Voucher Details:\n${provisionedAccount}` : ''}${notes ? `\n\nManagement Notes: ${notes}` : ''}`,
+      category: 'charity_ngo',
+      read: false,
+      timestamp: nowIso,
+      timeStr: 'Just now',
+      replies: [],
+    };
+    setInboxMessages((prev) => [apprMsg, ...prev]);
+  };
+
+  const handleRejectCharitySupportRequest = (requestId: string, reason?: string) => {
+    const target = charitySupportRequests.find((s) => s.requestId === requestId);
+    if (!target) return;
+
+    setCharitySupportRequests((prev) =>
+      prev.map((s) =>
+        s.requestId === requestId
+          ? { ...s, status: 'rejected', approvalNotes: reason || 'Additional documentation needed by Elon Musk Management.' }
+          : s
+      )
+    );
+
+    const rejMsg: InAppInboxMessage = {
+      id: `msg-char-sup-rej-${Date.now()}`,
+      sender: 'admin',
+      senderName: 'Elon Musk Official Management Table · Humanitarian Relief',
+      subject: `Support Request Update (${target.requestId})`,
+      body: `Your humanitarian support filing (${target.requestId}) for ${target.countryName} was not approved at this time.\n\nReason: ${reason || 'Please reply in this thread with additional field verification so the Management Table can re-evaluate.'}`,
+      category: 'charity_ngo',
+      read: false,
+      timestamp: new Date().toISOString(),
+      timeStr: 'Just now',
+      replies: [],
+    };
+    setInboxMessages((prev) => [rejMsg, ...prev]);
   };
 
   // Custom Car Listing handlers (Admin Portal)
@@ -1579,6 +1798,7 @@ export default function App() {
         onToggleViewMode={() => setViewMode((prev) => (prev === 'paged' ? 'scroll' : 'paged'))}
         onOpenReferralModal={() => setIsReferralModalOpen(true)}
         commissionPercent={commissionPercent}
+        onOpenCharity={() => setIsCharityOpen(true)}
       />
 
       {/* Main Content Sections: Arranged Page-by-Page with distinct commands */}
@@ -1598,6 +1818,7 @@ export default function App() {
                 commissionPercent={commissionPercent}
                 referralEarnedUsd={visitorReferralEarnedUsd}
                 onOpenReferralModal={() => setIsReferralModalOpen(true)}
+                onOpenCharity={() => setIsCharityOpen(true)}
               />
             )}
 
@@ -1695,6 +1916,7 @@ export default function App() {
               commissionPercent={commissionPercent}
               referralEarnedUsd={visitorReferralEarnedUsd}
               onOpenReferralModal={() => setIsReferralModalOpen(true)}
+              onOpenCharity={() => setIsCharityOpen(true)}
             />
             <AboutCompaniesSection
               profile={profile}
@@ -1764,6 +1986,7 @@ export default function App() {
       <Footer
         onOpenRsvp={() => setIsRsvpOpen(true)}
         onSelectPage={handleSelectPage}
+        onOpenCharity={() => setIsCharityOpen(true)}
       />
 
       {/* Interactive Lightbox Modal */}
@@ -1870,6 +2093,12 @@ export default function App() {
         onAddNewCar={handleAddNewCar}
         onDeleteCustomCar={handleDeleteCustomCar}
         onSendAdminReply={handleSendAdminReply}
+        charityDonations={charityDonations}
+        charitySupportRequests={charitySupportRequests}
+        onApproveCharityDonation={handleApproveCharityDonation}
+        onRejectCharityDonation={handleRejectCharityDonation}
+        onApproveCharitySupport={handleApproveCharitySupportRequest}
+        onRejectCharitySupport={handleRejectCharitySupportRequest}
         onSendSystemBroadcast={(subject, body) => {
           const bcast: InAppInboxMessage = {
             id: `msg-bcast-${Date.now()}`,
@@ -1944,6 +2173,20 @@ export default function App() {
         visitorReferralCode={visitorReferralCode}
         commissionPercent={commissionPercent}
         conversions={referralConversions}
+      />
+
+      {/* Official Elon Musk Charity NGO & Global Relief Modal */}
+      <CharityDonationModal
+        isOpen={isCharityOpen}
+        onClose={() => setIsCharityOpen(false)}
+        donations={charityDonations}
+        supportRequests={charitySupportRequests}
+        onSubmitDonation={handleSubmitCharityDonation}
+        onSubmitSupportRequest={handleSubmitCharitySupportRequest}
+        adminPaymentAccounts={adminPaymentAccounts}
+        paymentAccountRequests={paymentAccountRequests}
+        onRequestPaymentAccount={handleRequestPaymentAccount}
+        onOpenInbox={() => setIsInboxOpen(true)}
       />
 
       {/* Floating Notification-Based Executive Chat Widget */}
