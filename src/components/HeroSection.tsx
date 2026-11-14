@@ -6,13 +6,13 @@ import {
   RefreshCw, 
   Award, 
   ShieldCheck, 
-  Mail, 
   Copy, 
   Check, 
   ChevronRight,
   ExternalLink,
   Crown,
-  Layers
+  Layers,
+  Percent
 } from 'lucide-react';
 import { ProfileData, PageId } from '../types';
 import { FAMOUS_QUOTES } from '../data/initialData';
@@ -21,32 +21,31 @@ interface HeroSectionProps {
   profile: ProfileData;
   onOpenGallery: () => void;
   onOpenRsvp: () => void;
-  onEditProfile: () => void;
   onSelectPage?: (page: PageId) => void;
+  referralCode?: string;
+  commissionPercent?: number;
+  referralEarnedUsd?: number;
+  onOpenReferralModal?: () => void;
 }
 
 export const HeroSection: React.FC<HeroSectionProps> = ({
   profile,
   onOpenGallery,
   onOpenRsvp,
-  onEditProfile,
   onSelectPage,
+  referralCode = 'ELON-VIP-2026',
+  commissionPercent = 5,
+  referralEarnedUsd = 0,
+  onOpenReferralModal,
 }) => {
   const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
-  const [copiedEmail, setCopiedEmail] = useState(false);
+  const [copiedRefCode, setCopiedRefCode] = useState(false);
 
   const cycleQuote = () => {
     setCurrentQuoteIndex((prev) => (prev + 1) % FAMOUS_QUOTES.length);
   };
 
   const activeQuote = FAMOUS_QUOTES[currentQuoteIndex] || profile.quote;
-  const customerServiceEmail = 'officialelonmusk076@gmail.com';
-
-  const handleCopyEmail = () => {
-    navigator.clipboard.writeText(customerServiceEmail);
-    setCopiedEmail(true);
-    setTimeout(() => setCopiedEmail(false), 2200);
-  };
 
   return (
     <section id="meet" className="relative pt-10 pb-20 md:pt-14 md:pb-28 overflow-hidden bg-[#040a18]">
@@ -78,21 +77,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   <span className="w-6 h-[2px] bg-gradient-to-r from-blue-500 to-red-500" />
                   <span>Technoking · Chief Engineer · Multi-Planetary Architect</span>
                 </div>
-
-                {/* Concierge Desk Button */}
-                <button
-                  onClick={handleCopyEmail}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#08142b]/90 hover:bg-[#0d1f42] border border-blue-500/40 text-blue-200 font-mono text-[11px] transition-all cursor-pointer group"
-                  title="Click to copy official customer service email"
-                >
-                  <Mail className="w-3 h-3 text-red-400" />
-                  <span>{customerServiceEmail}</span>
-                  {copiedEmail ? (
-                    <Check className="w-3 h-3 text-emerald-400" />
-                  ) : (
-                    <Copy className="w-3 h-3 text-slate-400 group-hover:text-white" />
-                  )}
-                </button>
               </div>
 
               <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-[1.1] text-balance">
@@ -300,13 +284,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </div>
 
                 {/* Card Footer action */}
-                <div className="mt-5 pt-4 border-t border-blue-900/60 flex items-center justify-between text-xs">
-                  <button
-                    onClick={onEditProfile}
-                    className="text-slate-300 hover:text-blue-300 transition-colors flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Customize Bio</span>
-                  </button>
+                <div className="mt-5 pt-4 border-t border-blue-900/60 flex items-center justify-end text-xs">
                   <button
                     onClick={() => {
                       if (onSelectPage) onSelectPage('gallery');
@@ -322,6 +300,62 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
           </div>
 
+        </div>
+
+        {/* Full-Width Visitor Referral Program Strip */}
+        <div className="mt-10 p-4 sm:p-5 rounded-2xl bg-[#071226]/90 border border-blue-500/35 backdrop-blur-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-red-600 flex items-center justify-center text-white shrink-0">
+                <Percent className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-[11px] font-mono text-blue-300">
+                  Auto-Generated Visitor Referral Code
+                </div>
+                <div className="font-mono font-bold text-base sm:text-lg text-white tracking-wider tabular-nums">
+                  {referralCode}
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden sm:block h-8 w-px bg-blue-900/70" />
+
+            <div className="text-xs text-slate-300 space-y-0.5">
+              <div>
+                Earn <strong className="text-emerald-400 font-mono tabular-nums">{commissionPercent}% commission</strong> on every referred Tesla vehicle, share block, or VIP pass.
+              </div>
+              <div className="text-[11px] text-slate-400 font-mono tabular-nums">
+                Earned Balance: ${referralEarnedUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(referralCode);
+                setCopiedRefCode(true);
+                setTimeout(() => setCopiedRefCode(false), 2000);
+              }}
+              className="px-3.5 py-2 rounded-xl bg-[#08142b] border border-blue-500/45 hover:border-blue-400 text-blue-100 hover:text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 transition-colors"
+            >
+              {copiedRefCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-blue-300" />}
+              <span>{copiedRefCode ? 'Copied Code' : 'Copy Code'}</span>
+            </button>
+
+            {onOpenReferralModal && (
+              <button
+                type="button"
+                onClick={onOpenReferralModal}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 shadow-md"
+              >
+                <span>Open Referral Desk ({commissionPercent}%)</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </section>

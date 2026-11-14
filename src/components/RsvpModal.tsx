@@ -16,10 +16,15 @@ import {
   Image as ImageIcon,
   Mail
 } from 'lucide-react';
+import { VipPassRequest } from '../types';
 
 interface RsvpModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSubmitVipRequest?: (request: VipPassRequest) => void;
+  onOpenInbox?: () => void;
+  defaultReferralCode?: string;
+  commissionPercent?: number;
 }
 
 export type VipTier = 'silver' | 'platinum' | 'gold';
@@ -85,9 +90,15 @@ const VIP_TIERS: VipTierInfo[] = [
   },
 ];
 
-export const RsvpModal: React.FC<RsvpModalProps> = ({ isOpen, onClose }) => {
+export const RsvpModal: React.FC<RsvpModalProps> = ({
+  isOpen,
+  onClose,
+  onSubmitVipRequest,
+  onOpenInbox,
+  defaultReferralCode = '',
+  commissionPercent = 5,
+}) => {
   const [selectedTier, setSelectedTier] = useState<VipTier>('gold');
-  const [activeView, setActiveView] = useState<'card' | 'physical'>('card');
   const [submitted, setSubmitted] = useState(false);
 
   // Form Fields
@@ -96,6 +107,7 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({ isOpen, onClose }) => {
   const [email, setEmail] = useState('');
   const [purpose, setPurpose] = useState('executive-briefing');
   const [preferredDate, setPreferredDate] = useState('2026-11-20');
+  const [referralCodeInput, setReferralCodeInput] = useState(defaultReferralCode);
   const [ticketId, setTicketId] = useState('');
 
   if (!isOpen) return null;
@@ -106,6 +118,29 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({ isOpen, onClose }) => {
     e.preventDefault();
     if (!name || !email) return;
     const generatedId = `EM-${selectedTier.toUpperCase()}-${Math.floor(100000 + Math.random() * 900000)}`;
+    const now = new Date();
+    const normalizedRef = referralCodeInput.trim().toUpperCase();
+    const vipRequest: VipPassRequest = {
+      ticketId: generatedId,
+      tier: selectedTier,
+      tierName: currentTier.name,
+      price: currentTier.price,
+      guestName: name.trim(),
+      organization: organization.trim() || undefined,
+      email: email.trim(),
+      purpose,
+      preferredDate,
+      requestedAt: now.toISOString(),
+      orderDate: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      status: 'pending_admin_approval',
+      referralCodeUsed: normalizedRef || undefined,
+      referralCommissionPercent: normalizedRef ? commissionPercent : undefined,
+      referralCommissionAmount: normalizedRef
+        ? Math.round(currentTier.price * (commissionPercent / 100) * 100) / 100
+        : undefined,
+    };
+
+    onSubmitVipRequest?.(vipRequest);
     setTicketId(generatedId);
     setSubmitted(true);
   };
@@ -160,113 +195,76 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({ isOpen, onClose }) => {
                 <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">
                   Plaque Design Preview
                 </span>
-                
-                {/* View toggle */}
-                <div className="flex items-center gap-1 p-0.5 bg-[#08142b] rounded-lg border border-blue-900/70 text-[11px]">
-                  <button
-                    type="button"
-                    onClick={() => setActiveView('card')}
-                    className={`px-2.5 py-1 rounded font-medium cursor-pointer transition-colors ${
-                      activeView === 'card' ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white font-semibold' : 'text-slate-300 hover:text-white'
-                    }`}
-                  >
-                    Elon Plaque
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveView('physical')}
-                    className={`px-2.5 py-1 rounded font-medium cursor-pointer transition-colors ${
-                      activeView === 'physical' ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white font-semibold' : 'text-slate-300 hover:text-white'
-                    }`}
-                  >
-                    Physical Keepsake
-                  </button>
-                </div>
               </div>
 
-              {activeView === 'card' ? (
-                /* The custom Elon Musk Brushed Metal Plaque */
-                <div className="relative p-2 rounded-2xl bg-[#040a18] shadow-2xl border border-blue-900/60">
-                  {/* Outer Beveled Metal Plaque Container */}
-                  <div
-                    className={`relative w-full aspect-[4/6] rounded-xl p-5 flex flex-col justify-between items-center text-center transition-all duration-500 overflow-hidden ${currentTier.plaqueClass}`}
-                  >
-                    {/* Double debossed inner border frame (matching reference photo) */}
-                    <div className="absolute inset-2.5 rounded-lg border border-black/25 pointer-events-none" />
-                    <div className="absolute inset-3.5 rounded-md border border-white/40 pointer-events-none" />
+              {/* The custom Elon Musk Brushed Metal Plaque */}
+              <div className="relative p-2 rounded-2xl bg-[#040a18] shadow-2xl border border-blue-900/60">
+                {/* Outer Beveled Metal Plaque Container */}
+                <div
+                  className={`relative w-full aspect-[4/6] rounded-xl p-5 flex flex-col justify-between items-center text-center transition-all duration-500 overflow-hidden ${currentTier.plaqueClass}`}
+                >
+                  {/* Double debossed inner border frame (matching reference photo) */}
+                  <div className="absolute inset-2.5 rounded-lg border border-black/25 pointer-events-none" />
+                  <div className="absolute inset-3.5 rounded-md border border-white/40 pointer-events-none" />
 
-                    {/* Top: ELON MUSK */}
-                    <div className="relative z-10 pt-2 space-y-0.5">
-                      <h4
-                        className={`font-display text-2xl font-black tracking-[0.22em] uppercase ${currentTier.textColor}`}
+                  {/* Top: ELON MUSK */}
+                  <div className="relative z-10 pt-2 space-y-0.5">
+                    <h4
+                      className={`font-display text-2xl font-black tracking-[0.22em] uppercase ${currentTier.textColor}`}
+                    >
+                      ELON MUSK
+                    </h4>
+                    <div className="text-[9px] font-mono font-semibold tracking-widest text-black/70 uppercase">
+                      CHIEF ENGINEER & TECHNOLOGIST
+                    </div>
+                  </div>
+
+                  {/* Center: Aerospace & Energy Emblem */}
+                  <div className="relative z-10 my-auto space-y-3">
+                    {/* Custom Elon Emblem replacing film reel */}
+                    <div className="w-14 h-14 rounded-full border-2 border-black/40 flex items-center justify-center mx-auto bg-black/5 shadow-inner">
+                      <div className="flex items-center gap-1 text-black/80">
+                        <Rocket className="w-5 h-5" />
+                        <Zap className="w-4 h-4" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="text-[11px] font-bold tracking-[0.25em] text-black/80 uppercase">
+                        EXCLUSIVE
+                      </div>
+                      <div
+                        className={`font-display text-lg font-black tracking-[0.14em] uppercase leading-tight ${currentTier.textColor}`}
                       >
-                        ELON MUSK
-                      </h4>
-                      <div className="text-[9px] font-mono font-semibold tracking-widest text-black/70 uppercase">
-                        CHIEF ENGINEER & TECHNOLOGIST
+                        GREET & MEET
+                      </div>
+                      <div className="text-[11px] font-bold tracking-[0.25em] text-black/80 uppercase">
+                        EXPERIENCE
                       </div>
                     </div>
 
-                    {/* Center: Aerospace & Energy Emblem */}
-                    <div className="relative z-10 my-auto space-y-3">
-                      {/* Custom Elon Emblem replacing film reel */}
-                      <div className="w-14 h-14 rounded-full border-2 border-black/40 flex items-center justify-center mx-auto bg-black/5 shadow-inner">
-                        <div className="flex items-center gap-1 text-black/80">
-                          <Rocket className="w-5 h-5" />
-                          <Zap className="w-4 h-4" />
-                        </div>
-                      </div>
+                    <div className="text-[9px] font-mono tabular-nums font-semibold text-black/70 tracking-widest uppercase">
+                      {currentTier.badge} · ${currentTier.price.toLocaleString()}
+                    </div>
+                  </div>
 
-                      <div className="space-y-1">
-                        <div className="text-[11px] font-bold tracking-[0.25em] text-black/80 uppercase">
-                          EXCLUSIVE
-                        </div>
-                        <div
-                          className={`font-display text-lg font-black tracking-[0.14em] uppercase leading-tight ${currentTier.textColor}`}
-                        >
-                          GREET & MEET
-                        </div>
-                        <div className="text-[11px] font-bold tracking-[0.25em] text-black/80 uppercase">
-                          EXPERIENCE
-                        </div>
-                      </div>
-
-                      <div className="text-[9px] font-mono tabular-nums font-semibold text-black/70 tracking-widest uppercase">
-                        {currentTier.badge} · ${currentTier.price.toLocaleString()}
-                      </div>
+                  {/* Bottom: Elon Portrait Medallion Engraving */}
+                  <div className="relative z-10 pb-2 flex flex-col items-center">
+                    <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-black/40 shadow-md bg-stone-300 relative group">
+                      <img
+                        src="/assets/aistudio/elo_e882ff2e.webp"
+                        alt="Elon Musk Engraved Portrait"
+                        className="w-full h-full object-cover object-top grayscale contrast-125 brightness-95 filter"
+                      />
+                      <div className="absolute inset-0 bg-amber-500/10 mix-blend-multiply" />
                     </div>
 
-                    {/* Bottom: Elon Portrait Medallion Engraving */}
-                    <div className="relative z-10 pb-2 flex flex-col items-center">
-                      <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-black/40 shadow-md bg-stone-300 relative group">
-                        <img
-                          src="/assets/aistudio/elo_e882ff2e.webp"
-                          alt="Elon Musk Engraved Portrait"
-                          className="w-full h-full object-cover object-top grayscale contrast-125 brightness-95 filter"
-                        />
-                        <div className="absolute inset-0 bg-amber-500/10 mix-blend-multiply" />
-                      </div>
-
-                      <div className="text-[8px] font-mono font-semibold tracking-widest uppercase text-black/75 pt-1.5">
-                        {name ? `HONORED GUEST: ${name.toUpperCase()}` : 'VIP CLEARANCE · STARBASE & GIGA TEXAS'}
-                      </div>
+                    <div className="text-[8px] font-mono font-semibold tracking-widest uppercase text-black/75 pt-1.5">
+                      {name ? `HONORED GUEST: ${name.toUpperCase()}` : 'VIP CLEARANCE · STARBASE & GIGA TEXAS'}
                     </div>
                   </div>
                 </div>
-              ) : (
-                /* Physical Reference Plaque View from User Upload */
-                <div className="relative rounded-xl overflow-hidden bg-[#08142b] border border-blue-900/60 shadow-xl">
-                  <img
-                    src="/assets/aistudio/b9dfb02c-a28c-4fb3-8565-2ca793b5d3a4_ad75e2b2.jpeg"
-                    alt="Commemorative Metal Plaque Keepsake"
-                    className="w-full h-auto object-cover"
-                  />
-                  <div className="p-3 bg-[#040a18]/90 border-t border-blue-900/60 text-[11px] text-slate-200 flex items-center justify-between">
-                    <span className="font-semibold text-blue-300">Physical Brushed Metal Keepsake</span>
-                    <span className="text-slate-400 font-mono">Crafted in Austin, TX</span>
-                  </div>
-                </div>
-              )}
+              </div>
 
               {/* Plaque Quality Description */}
               <div className="p-3.5 rounded-xl bg-[#08142b] border border-blue-900/60 text-xs text-slate-300 space-y-1">
@@ -432,6 +430,24 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({ isOpen, onClose }) => {
                   </div>
                 </div>
 
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-semibold text-slate-200">
+                      Referral Code (Optional)
+                    </label>
+                    <span className="text-[11px] font-mono text-emerald-400 tabular-nums">
+                      Referrer earns {commissionPercent}% (${Math.round(currentTier.price * (commissionPercent / 100)).toLocaleString()})
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={referralCodeInput}
+                    onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
+                    placeholder="e.g. ELON-XXXX-XX"
+                    className="w-full px-3.5 py-2 text-xs bg-[#040a18] border border-blue-900/70 rounded-lg text-slate-100 font-mono uppercase focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+
                 {/* Submit / Purchase Button */}
                 <div className="pt-4 border-t border-blue-900/60 flex items-center justify-between gap-3">
                   <div className="text-xs text-slate-300">
@@ -444,17 +460,6 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({ isOpen, onClose }) => {
                   >
                     <span>Reserve {currentTier.name.split(' ')[0]} Plaque Pass (${currentTier.price.toLocaleString()})</span>
                   </button>
-                </div>
-
-                <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 text-[11px] text-slate-300">
-                  <span>Direct VIP Customer Service:</span>
-                  <a
-                    href="mailto:officialelonmusk076@gmail.com"
-                    className="text-blue-300 hover:text-white font-mono transition-colors flex items-center gap-1 font-medium"
-                  >
-                    <Mail className="w-3 h-3 text-red-400" />
-                    <span>officialelonmusk076@gmail.com</span>
-                  </a>
                 </div>
               </form>
 
@@ -533,6 +538,32 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({ isOpen, onClose }) => {
               </div>
             </div>
 
+            {/* Admin Approval Routing Notice */}
+            <div className="max-w-lg mx-auto p-4 rounded-xl bg-blue-950/45 border border-blue-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold text-white">Sent to Elon Musk Official Management Table</div>
+                  <p className="text-[11px] text-slate-300 mt-0.5">
+                    Pass <span className="font-mono text-blue-300">{ticketId}</span> has been sent to the Elon Musk Official Management Table for account provisioning and clearance verification. Updates arrive directly in your In-App Inbox.
+                  </p>
+                </div>
+              </div>
+              {onOpenInbox && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenInbox();
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-[#08142b] border border-blue-500/50 text-blue-200 hover:text-white text-[11px] font-semibold flex items-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Open Inbox</span>
+                </button>
+              )}
+            </div>
+
             {/* Confirmation actions */}
             <div className="max-w-lg mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
               <button
@@ -545,7 +576,26 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({ isOpen, onClose }) => {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => {
-                    alert(`VIP Plaque Pass ${ticketId} downloaded!`);
+                    const summary = [
+                      'ELON MUSK · VIP GREET & MEET PLAQUE PASS',
+                      '=========================================',
+                      `Ticket ID: ${ticketId}`,
+                      `Tier: ${currentTier.name} ($${currentTier.price.toLocaleString()} USD)`,
+                      `Issued To: ${name.toUpperCase()}`,
+                      `Organization: ${organization || 'INDEPENDENT DELEGATE'}`,
+                      `Email: ${email}`,
+                      `Preferred Date: ${preferredDate}`,
+                      'Status: Sent to Elon Musk Official Management Table (Pending Verification)',
+                    ].join('\n');
+                    const blob = new Blob([summary], { type: 'text/plain;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `${ticketId}-vip-pass.txt`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
                   }}
                   className="px-4 py-2.5 rounded-lg border border-blue-800/80 bg-[#08142b] text-slate-100 text-xs font-semibold hover:border-blue-400/70 flex items-center gap-1.5 cursor-pointer"
                 >

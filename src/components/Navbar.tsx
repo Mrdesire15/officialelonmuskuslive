@@ -17,7 +17,8 @@ import {
   Lock,
   ShieldAlert,
   TrendingUp,
-  DollarSign
+  DollarSign,
+  Percent
 } from 'lucide-react';
 import { PageId, PageDefinition } from '../types';
 import { PAGES_CONFIG } from '../data/pagesData';
@@ -37,6 +38,8 @@ interface NavbarProps {
   onSelectPage: (pageId: PageId) => void;
   viewMode: 'paged' | 'scroll';
   onToggleViewMode: () => void;
+  onOpenReferralModal?: () => void;
+  commissionPercent?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -54,6 +57,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectPage,
   viewMode,
   onToggleViewMode,
+  onOpenReferralModal,
+  commissionPercent = 5,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const logoTapCountRef = useRef(0);
@@ -226,6 +231,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>VIP Pass</span>
               </button>
 
+              {/* Referral Earn % Key */}
+              {onOpenReferralModal && (
+                <button
+                  onClick={onOpenReferralModal}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border border-emerald-500/45 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 hover:text-white transition-all cursor-pointer shadow-sm font-mono whitespace-nowrap shrink-0 tabular-nums"
+                  title={`View your auto-generated referral code and earn ${commissionPercent}% commission`}
+                >
+                  <Percent className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Earn {commissionPercent}%</span>
+                </button>
+              )}
+
               {/* My Orders Key (When orders exist) */}
               {ordersCount > 0 && (
                 <button
@@ -357,6 +374,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               Pre-Order Car
             </button>
+            {onOpenReferralModal && (
+              <button
+                onClick={() => {
+                  onOpenReferralModal();
+                  setMobileMenuOpen(false);
+                }}
+                className="py-2.5 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/45 text-emerald-200 text-xs font-bold font-mono tabular-nums cursor-pointer"
+              >
+                Referral Code & Earn {commissionPercent}%
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -22,7 +22,12 @@ import {
   History,
   Calendar,
   Award,
+  ExternalLink,
+  Link2,
+  Copy,
+  FileText,
 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 import {
   ResponsiveContainer,
   BarChart,
@@ -40,6 +45,8 @@ interface MyOrdersModalProps {
   orders: TeslaOrder[];
   onCancelOrder: (orderId: string) => void;
   onUpdateOrderStatus?: (orderId: string, nextStatus: TeslaOrder['status']) => void;
+  onAttachTrackingUrl?: (orderId: string, trackingUrl: string) => void;
+  isAdmin?: boolean;
   onOrderNewCar: () => void;
   onOpenInbox?: () => void;
 }
@@ -190,11 +197,42 @@ function getOrderDeliveryDateLabel(order: TeslaOrder): string {
   return order.orderDate || order.estimatedDelivery;
 }
 
+function sanitizeExternalUrl(raw?: string): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(withProtocol);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.href;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function getOrderTrackingHistory(order: TeslaOrder): OrderTrackingEvent[] {
   if (order.trackingHistory && order.trackingHistory.length > 0) {
-    return [...order.trackingHistory].sort(
+    const sorted = [...order.trackingHistory].sort(
       (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
+    const safeOrderUrl = sanitizeExternalUrl(order.externalTrackingUrl);
+    if (safeOrderUrl && !sorted.some((evt) => sanitizeExternalUrl(evt.externalTrackingUrl) === safeOrderUrl)) {
+      sorted.push({
+        id: `dynamic-ext-${order.orderId}`,
+        stage: order.status || 'Logistics Dispatch',
+        title: 'External Shipment Tracking Link Attached',
+        details: `Live carrier tracking portal assigned by Executive Admin for ${order.vehicleName} (VIN ${order.reservationVin}).`,
+        location: order.deliveryAddress || order.city || 'Tesla Logistics Dispatch Network',
+        timestamp: new Date().toISOString(),
+        dateStr: order.orderDate,
+        statusType: 'stage_update',
+        externalTrackingUrl: safeOrderUrl,
+      });
+    }
+    return sorted;
   }
 
   const events: OrderTrackingEvent[] = [
@@ -215,8 +253,8 @@ function getOrderTrackingHistory(order: TeslaOrder): OrderTrackingEvent[] {
       id: `fallback-approve-${order.orderId}`,
       stage: 'Assembly',
       title: 'Payment Approved & VIN Allocated',
-      details: order.approvalNotes || `VIN ${order.reservationVin} approved by Executive Admin Desk.`,
-      location: 'Tesla Executive Admin & Treasury Desk',
+      details: order.approvalNotes || `VIN ${order.reservationVin} approved by Elon Musk Official Management Table.`,
+      location: 'Elon Musk Official Management Table & Treasury',
       timestamp: order.approvedAt || parseOrderDateSafe(order.orderDate).toISOString(),
       dateStr: order.approvedAt
         ? new Date(order.approvedAt).toLocaleString('en-US', {
@@ -235,7 +273,7 @@ function getOrderTrackingHistory(order: TeslaOrder): OrderTrackingEvent[] {
       stage: 'Production',
       title: 'Payment Verification Hold',
       details: order.approvalNotes || 'Additional transfer confirmation requested.',
-      location: 'Tesla Central Treasury Desk',
+      location: 'Elon Musk Official Management Table · Treasury',
       timestamp: parseOrderDateSafe(order.orderDate).toISOString(),
       dateStr: order.orderDate,
       statusType: 'rejected',
@@ -258,6 +296,21 @@ function getOrderTrackingHistory(order: TeslaOrder): OrderTrackingEvent[] {
       timestamp: order.deliveredAt || new Date().toISOString(),
       dateStr: getOrderDeliveryDateLabel(order),
       statusType: isOrderCompleted(order) ? 'delivered' : 'stage_update',
+    });
+  }
+
+  const safeOrderUrl = sanitizeExternalUrl(order.externalTrackingUrl);
+  if (safeOrderUrl) {
+    events.push({
+      id: `fallback-ext-${order.orderId}`,
+      stage: order.status || 'Logistics Dispatch',
+      title: 'External Shipment Tracking Link Attached',
+      details: `Live carrier tracking portal assigned by Executive Admin for ${order.vehicleName} (VIN ${order.reservationVin}).`,
+      location: `${order.deliveryAddress || order.city || 'Tesla Logistics Dispatch Network'}`,
+      timestamp: new Date().toISOString(),
+      dateStr: order.orderDate,
+      statusType: 'stage_update',
+      externalTrackingUrl: safeOrderUrl,
     });
   }
 
@@ -285,17 +338,48 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
   orders,
   onCancelOrder,
   onUpdateOrderStatus,
+  onAttachTrackingUrl,
+  isAdmin = false,
   onOrderNewCar,
   onOpenInbox,
 }) => {
   const [inspectedStepByOrder, setInspectedStepByOrder] = useState<Record<string, number>>({});
   const [expandedHistoryByOrder, setExpandedHistoryByOrder] = useState<Record<string, boolean>>({});
+  const [trackingUrlDrafts, setTrackingUrlDrafts] = useState<Record<string, string>>({});
+  const [trackingUrlErrors, setTrackingUrlErrors] = useState<Record<string, string>>({});
+  const [copiedTrackingEventId, setCopiedTrackingEventId] = useState<string | null>(null);
   const [ordersViewTab, setOrdersViewTab] = useState<'all' | 'active' | 'timeline'>('all');
   const [downloadedOrderId, setDownloadedOrderId] = useState<string | null>(null);
+  const [generatedInvoiceOrderId, setGeneratedInvoiceOrderId] = useState<string | null>(null);
   const [showTrendsChart, setShowTrendsChart] = useState<boolean>(true);
   const [chartGrouping, setChartGrouping] = useState<'monthly' | 'daily'>('monthly');
   const [chartMetric, setChartMetric] = useState<'count' | 'spend'>('count');
   const [focusedModel, setFocusedModel] = useState<VehicleModelCategory | 'all'>('all');
+
+  const handleTrackingUrlSubmit = (order: TeslaOrder) => {
+    const raw = (trackingUrlDrafts[order.orderId] ?? order.externalTrackingUrl ?? '').trim();
+    const safeUrl = sanitizeExternalUrl(raw);
+    if (!safeUrl) {
+      setTrackingUrlErrors((prev) => ({
+        ...prev,
+        [order.orderId]: 'Enter a valid http:// or https:// tracking URL.',
+      }));
+      return;
+    }
+
+    setTrackingUrlErrors((prev) => ({ ...prev, [order.orderId]: '' }));
+    onAttachTrackingUrl?.(order.orderId, safeUrl);
+    setTrackingUrlDrafts((prev) => ({ ...prev, [order.orderId]: safeUrl }));
+    setExpandedHistoryByOrder((prev) => ({ ...prev, [order.orderId]: true }));
+  };
+
+  const handleCopyTrackingLink = (id: string, url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopiedTrackingEventId(id);
+    window.setTimeout(() => {
+      setCopiedTrackingEventId((prev) => (prev === id ? null : prev));
+    }, 2000);
+  };
 
   const ownershipAnalytics = useMemo(() => {
     const activeOrders = orders.filter((o) => !isOrderCompleted(o));
@@ -518,6 +602,237 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
     setDownloadedOrderId(order.orderId);
     window.setTimeout(() => {
       setDownloadedOrderId((prev) => (prev === order.orderId ? null : prev));
+    }, 2800);
+  };
+
+  const handleGeneratePdfInvoice = (order: TeslaOrder) => {
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 44;
+    const contentWidth = pageWidth - margin * 2;
+    const deliveryDateLabel = getOrderDeliveryDateLabel(order);
+    const invoiceNumber = `INV-${order.orderId.replace(/^TSLA-ORD-/, '')}`;
+    const paymentMethodLabel =
+      order.paymentMethod === 'gift_card'
+        ? 'GIFT CARD'
+        : order.paymentMethod === 'wire'
+        ? 'WIRE TRANSFER / ACH'
+        : order.paymentMethod === 'crypto'
+        ? 'CRYPTOCURRENCY (BTC / DOGE / USDC)'
+        : (order.paymentMethod || 'ESCROW').toUpperCase();
+    const paymentStatusLabel =
+      order.paymentStatus === 'approved'
+        ? 'APPROVED & VERIFIED'
+        : order.paymentStatus === 'rejected'
+        ? 'VERIFICATION HOLD'
+        : 'PENDING VERIFICATION';
+
+    // Top Header Banner
+    doc.setFillColor(6, 16, 36);
+    doc.rect(0, 0, pageWidth, 108, 'F');
+    doc.setFillColor(220, 38, 38);
+    doc.rect(0, 104, pageWidth, 4, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('TESLA EXECUTIVE FLEET', margin, 42);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(147, 197, 253);
+    doc.text('OFFICIAL VEHICLE INVOICE, PAYMENT RECORD & VIN ALLOCATION', margin, 60);
+    doc.text('Issued & Verified via Elon Musk Official Management Table', margin, 76);
+
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.text(`INVOICE #: ${invoiceNumber}`, pageWidth - margin, 42, { align: 'right' });
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(203, 213, 225);
+    doc.text(`Order ID: ${order.orderId}`, pageWidth - margin, 58, { align: 'right' });
+    doc.text(`Order Date: ${order.orderDate}`, pageWidth - margin, 72, { align: 'right' });
+    doc.text(`Delivered: ${deliveryDateLabel}`, pageWidth - margin, 86, { align: 'right' });
+
+    let y = 136;
+
+    // Customer & Delivery Section
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(margin, y, contentWidth, 74, 4, 4, 'F');
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('BILLED TO / REGISTERED OWNER', margin + 12, y + 18);
+    doc.text('DELIVERY & LOGISTICS DESTINATION', margin + contentWidth / 2 + 6, y + 18);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(51, 65, 85);
+    doc.text(order.customerName, margin + 12, y + 35);
+    doc.text(order.customerEmail, margin + 12, y + 49);
+    doc.text(order.customerPhone || '+1 (555) 019-2834', margin + 12, y + 63);
+
+    doc.text(order.deliveryAddress || 'Tesla Delivery Center', margin + contentWidth / 2 + 6, y + 35);
+    doc.text(
+      `${order.city || 'Austin, TX'}${order.postalCode ? ` ${order.postalCode}` : ''}`,
+      margin + contentWidth / 2 + 6,
+      y + 49
+    );
+    doc.text(`Final Status: ${order.status}`, margin + contentWidth / 2 + 6, y + 63);
+
+    y += 94;
+
+    // VIN Allocation Box
+    doc.setDrawColor(59, 130, 246);
+    doc.setLineWidth(1);
+    doc.setFillColor(239, 246, 255);
+    doc.roundedRect(margin, y, contentWidth, 64, 4, 4, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(30, 58, 138);
+    doc.text('OFFICIAL VIN ALLOCATION & VEHICLE SPECIFICATION', margin + 12, y + 18);
+
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`VIN: ${order.reservationVin}`, margin + 12, y + 37);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(51, 65, 85);
+    doc.text(
+      `Model: ${order.vehicleName}${order.flightModeCertified ? ' (SpaceX Cold Gas Flight Certified)' : ''}`,
+      margin + 12,
+      y + 52
+    );
+    doc.text(
+      `Approved: ${order.approvedAt ? new Date(order.approvedAt).toLocaleDateString('en-US') : order.orderDate}`,
+      pageWidth - margin - 12,
+      y + 37,
+      { align: 'right' }
+    );
+
+    y += 82;
+
+    // Configuration Details Table
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('ORDER CONFIGURATION & LINE ITEMS', margin, y);
+    y += 10;
+
+    doc.setFillColor(15, 23, 42);
+    doc.rect(margin, y, contentWidth, 22, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text('ITEM / SPECIFICATION', margin + 10, y + 14);
+    doc.text('DETAILS', pageWidth - margin - 10, y + 14, { align: 'right' });
+    y += 22;
+
+    const configRows: Array<[string, string]> = [
+      ['Vehicle Model', order.vehicleName],
+      ['Exterior Finish', order.selectedColor.name],
+      ['Wheel Package', `${order.selectedWheels.name}${order.selectedWheels.size ? ` (${order.selectedWheels.size})` : ''}`],
+      ['Interior Cockpit', order.selectedInterior.name],
+      [
+        'Autonomous & Aerospace Packages',
+        order.selectedPackages && order.selectedPackages.length > 0
+          ? order.selectedPackages.map((p) => p.name).join(', ')
+          : 'Standard Factory Equipment',
+      ],
+    ];
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    configRows.forEach(([label, val], idx) => {
+      const wrappedVal = doc.splitTextToSize(val, contentWidth * 0.55);
+      const rowHeight = Math.max(22, wrappedVal.length * 12 + 10);
+      if (idx % 2 === 1) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(margin, y, contentWidth, rowHeight, 'F');
+      }
+      doc.setDrawColor(226, 232, 240);
+      doc.line(margin, y + rowHeight, pageWidth - margin, y + rowHeight);
+      doc.setTextColor(71, 85, 105);
+      doc.text(label, margin + 10, y + 15);
+      doc.setTextColor(15, 23, 42);
+      doc.text(wrappedVal, pageWidth - margin - 10, y + 15, { align: 'right' });
+      y += rowHeight;
+    });
+
+    y += 20;
+
+    // Payment Status & Financial Ledger
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('PAYMENT STATUS & SETTLEMENT SUMMARY', margin, y);
+    y += 10;
+
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(margin, y, contentWidth, 128, 4, 4, 'FD');
+
+    const paymentRows: Array<[string, string, boolean?]> = [
+      ['Payment Status', paymentStatusLabel, true],
+      ['Settlement Method', paymentMethodLabel],
+      ['Payment Reference', order.paymentReference || 'N/A'],
+      ['Payment Plan', order.paymentType === 'full' ? 'Full Vehicle Settlement' : 'Reservation Deposit + Delivery Balance'],
+      ['Total Configured Vehicle Price', `$${order.totalPrice.toLocaleString()} USD`, true],
+      ['Amount Paid / Verified Deposit', `$${order.amountPaidToday.toLocaleString()} USD`],
+      ['Remaining Balance Due', `$${order.balanceDue.toLocaleString()} USD`],
+    ];
+
+    let py = y + 18;
+    paymentRows.forEach(([label, val, highlight]) => {
+      doc.setFont('helvetica', highlight ? 'bold' : 'normal');
+      doc.setFontSize(9.2);
+      doc.setTextColor(71, 85, 105);
+      doc.text(label, margin + 12, py);
+      doc.setFont('courier', highlight ? 'bold' : 'normal');
+      doc.setTextColor(highlight && label === 'Payment Status' ? 5 : 15, highlight && label === 'Payment Status' ? 150 : 23, highlight && label === 'Payment Status' ? 105 : 42);
+      doc.text(val, pageWidth - margin - 12, py, { align: 'right' });
+      py += 16;
+    });
+
+    y += 146;
+
+    if (order.approvalNotes) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(15, 23, 42);
+      doc.text('Management Table Notes:', margin, y);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      const noteLines = doc.splitTextToSize(order.approvalNotes, contentWidth);
+      doc.text(noteLines, margin, y + 14);
+      y += 16 + noteLines.length * 12;
+    }
+
+    // Footer Stamp
+    const footerY = Math.min(740, Math.max(y + 18, 690));
+    doc.setDrawColor(203, 213, 225);
+    doc.line(margin, footerY, pageWidth - margin, footerY);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(
+      `Generated ${new Date().toLocaleString('en-US')} · Official Customer Record · Elon Musk Official Management Table`,
+      margin,
+      footerY + 16
+    );
+    doc.text(`VIN ${order.reservationVin} · ${order.orderId}`, pageWidth - margin, footerY + 16, {
+      align: 'right',
+    });
+
+    doc.save(`Tesla-Invoice-${order.orderId}.pdf`);
+
+    setGeneratedInvoiceOrderId(order.orderId);
+    window.setTimeout(() => {
+      setGeneratedInvoiceOrderId((prev) => (prev === order.orderId ? null : prev));
     }, 2800);
   };
 
@@ -1227,7 +1542,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                           <div className="p-3 rounded-lg bg-blue-950/60 border border-blue-500/35 text-xs text-blue-100 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                               <ShieldCheck className="w-4 h-4 text-blue-400 shrink-0" />
-                              <span>Payment directed to Admin for approval. Once verified, assembly progression unlocks automatically.</span>
+                              <span>Sent to Elon Musk Official Management Table for account provisioning and payment verification. Once verified, assembly progression unlocks automatically.</span>
                             </div>
                             {onOpenInbox && (
                               <button
@@ -1246,7 +1561,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                           <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-200 flex items-center gap-2">
                             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                             <span>
-                              Payment approved by Executive Admin Desk — VIN {order.reservationVin} active in Gigafactory telemetry ({order.status}).
+                              Payment approved by Elon Musk Official Management Table — VIN {order.reservationVin} active in Gigafactory telemetry ({order.status}).
                             </span>
                           </div>
                         ) : null}
@@ -1271,6 +1586,51 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                           </div>
                         </div>
 
+                        {/* Admin External Tracking URL Input (Admin Only) */}
+                        {isAdmin && onAttachTrackingUrl && (
+                          <div className="p-3.5 rounded-xl bg-[#040a18]/90 border border-blue-500/40 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
+                              <span className="text-blue-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                <Link2 className="w-3.5 h-3.5 text-red-400" />
+                                <span>Admin · External Shipment Tracking URL</span>
+                              </span>
+                              {order.externalTrackingUrl && (
+                                <span className="text-emerald-400 font-semibold">
+                                  Active Link Published
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <input
+                                type="url"
+                                value={trackingUrlDrafts[order.orderId] ?? order.externalTrackingUrl ?? ''}
+                                onChange={(e) => {
+                                  const nextVal = e.target.value;
+                                  setTrackingUrlDrafts((prev) => ({ ...prev, [order.orderId]: nextVal }));
+                                  if (trackingUrlErrors[order.orderId]) {
+                                    setTrackingUrlErrors((prev) => ({ ...prev, [order.orderId]: '' }));
+                                  }
+                                }}
+                                placeholder="Paste external tracking URL (e.g. https://carrier.com/track/VIN...)"
+                                className="flex-1 px-3 py-2 text-xs bg-[#08142b] border border-blue-900/70 rounded-lg text-white font-mono placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleTrackingUrlSubmit(order)}
+                                className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 shadow-sm"
+                              >
+                                <Link2 className="w-3.5 h-3.5" />
+                                <span>{order.externalTrackingUrl ? 'Update Tracking URL' : 'Attach Tracking URL'}</span>
+                              </button>
+                            </div>
+                            {trackingUrlErrors[order.orderId] && (
+                              <div className="text-[11px] font-mono text-red-300">
+                                {trackingUrlErrors[order.orderId]}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Footer Action Row */}
                         <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-[11px] text-slate-300 border-t border-blue-900/50">
                           <div className="flex items-center gap-2">
@@ -1279,6 +1639,18 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                           </div>
 
                           <div className="flex flex-wrap items-center gap-3">
+                            {sanitizeExternalUrl(order.externalTrackingUrl) && (
+                              <a
+                                href={sanitizeExternalUrl(order.externalTrackingUrl)!}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-emerald-300 hover:text-emerald-200 flex items-center gap-1 font-mono whitespace-nowrap font-semibold"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                <span>External Tracking</span>
+                              </a>
+                            )}
+
                             <button
                               type="button"
                               onClick={() =>
@@ -1298,6 +1670,26 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                                 <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                               )}
                             </button>
+
+                            {isDelivered && (
+                              <button
+                                type="button"
+                                onClick={() => handleGeneratePdfInvoice(order)}
+                                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 text-white text-xs flex items-center gap-1.5 cursor-pointer font-mono font-semibold whitespace-nowrap shadow-sm"
+                              >
+                                {generatedInvoiceOrderId === order.orderId ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 text-emerald-300" />
+                                    <span>PDF Invoice Ready</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <FileText className="w-3.5 h-3.5" />
+                                    <span>Generate PDF Invoice</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
 
                             <button
                               type="button"
@@ -1332,39 +1724,85 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                             </div>
 
                             <div className="relative pl-5 space-y-3 before:content-[''] before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-px before:bg-blue-800/70">
-                              {trackingEvents.map((evt) => (
-                                <div key={evt.id} className="relative space-y-0.5 text-xs">
-                                  <span
-                                    aria-hidden="true"
-                                    className={`absolute -left-5 top-1.5 w-3.5 h-3.5 rounded-full border-2 ${
-                                      evt.statusType === 'delivered' || evt.statusType === 'approved'
-                                        ? 'bg-emerald-500 border-emerald-200'
-                                        : evt.statusType === 'rejected'
-                                        ? 'bg-red-500 border-red-200'
-                                        : 'bg-blue-500 border-blue-200'
-                                    }`}
-                                  />
-                                  <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-semibold text-white">{evt.title}</span>
-                                      <span className="text-[11px] font-mono text-blue-300">
-                                        {evt.stage}
+                              {trackingEvents.map((evt) => {
+                                const safeEvtUrl = sanitizeExternalUrl(evt.externalTrackingUrl);
+                                return (
+                                  <div key={evt.id} className="relative space-y-1 text-xs">
+                                    <span
+                                      aria-hidden="true"
+                                      className={`absolute -left-5 top-1.5 w-3.5 h-3.5 rounded-full border-2 ${
+                                        evt.statusType === 'delivered' || evt.statusType === 'approved'
+                                          ? 'bg-emerald-500 border-emerald-200'
+                                          : evt.statusType === 'rejected'
+                                          ? 'bg-red-500 border-red-200'
+                                          : 'bg-blue-500 border-blue-200'
+                                      }`}
+                                    />
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-white">{evt.title}</span>
+                                        <span className="text-[11px] font-mono text-blue-300">
+                                          {evt.stage}
+                                        </span>
+                                      </div>
+                                      <span className="text-[11px] font-mono text-slate-400 tabular-nums">
+                                        {evt.dateStr}
                                       </span>
                                     </div>
-                                    <span className="text-[11px] font-mono text-slate-400 tabular-nums">
-                                      {evt.dateStr}
-                                    </span>
+                                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                                      {evt.details}
+                                    </p>
+                                    {evt.location && (
+                                      <div className="text-[10px] font-mono text-slate-400">
+                                        Hub: {evt.location}
+                                      </div>
+                                    )}
+                                    {safeEvtUrl && (
+                                      <div className="mt-1.5 p-2.5 rounded-lg bg-[#08142b] border border-blue-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <Link2 className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+                                          <a
+                                            href={safeEvtUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-[11px] font-mono text-blue-300 hover:text-white underline truncate"
+                                          >
+                                            {safeEvtUrl}
+                                          </a>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleCopyTrackingLink(evt.id, safeEvtUrl)}
+                                            className="px-2 py-1 rounded bg-[#040a18] border border-blue-800/70 text-[10px] font-mono text-slate-200 hover:text-white flex items-center gap-1 cursor-pointer"
+                                          >
+                                            {copiedTrackingEventId === evt.id ? (
+                                              <>
+                                                <Check className="w-3 h-3 text-emerald-400" />
+                                                <span className="text-emerald-300">Copied</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Copy className="w-3 h-3" />
+                                                <span>Copy</span>
+                                              </>
+                                            )}
+                                          </button>
+                                          <a
+                                            href={safeEvtUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-2.5 py-1 rounded bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 text-white text-[10px] font-mono font-bold flex items-center gap-1 whitespace-nowrap"
+                                          >
+                                            <span>Open Live Tracking</span>
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
-                                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                                    {evt.details}
-                                  </p>
-                                  {evt.location && (
-                                    <div className="text-[10px] font-mono text-slate-400">
-                                      Hub: {evt.location}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -1496,6 +1934,44 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                               </div>
                             </div>
 
+                            {/* Admin External Tracking URL Input (Admin Only) */}
+                            {isAdmin && onAttachTrackingUrl && (
+                              <div className="p-3 rounded-lg bg-[#040a18]/90 border border-blue-500/40 space-y-2">
+                                <div className="text-[10px] font-mono text-blue-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                  <Link2 className="w-3.5 h-3.5 text-red-400" />
+                                  <span>Admin · External Shipment Tracking URL</span>
+                                </div>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  <input
+                                    type="url"
+                                    value={trackingUrlDrafts[order.orderId] ?? order.externalTrackingUrl ?? ''}
+                                    onChange={(e) => {
+                                      const nextVal = e.target.value;
+                                      setTrackingUrlDrafts((prev) => ({ ...prev, [order.orderId]: nextVal }));
+                                      if (trackingUrlErrors[order.orderId]) {
+                                        setTrackingUrlErrors((prev) => ({ ...prev, [order.orderId]: '' }));
+                                      }
+                                    }}
+                                    placeholder="Paste external tracking URL (e.g. https://carrier.com/track/VIN...)"
+                                    className="flex-1 px-3 py-1.5 text-xs bg-[#08142b] border border-blue-900/70 rounded-lg text-white font-mono placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTrackingUrlSubmit(order)}
+                                    className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+                                  >
+                                    <Link2 className="w-3.5 h-3.5" />
+                                    <span>{order.externalTrackingUrl ? 'Update Tracking URL' : 'Attach Tracking URL'}</span>
+                                  </button>
+                                </div>
+                                {trackingUrlErrors[order.orderId] && (
+                                  <div className="text-[11px] font-mono text-red-300">
+                                    {trackingUrlErrors[order.orderId]}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-300">
                               <div className="flex items-center gap-1.5">
                                 <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -1505,6 +1981,18 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                               </div>
 
                               <div className="flex flex-wrap items-center gap-3">
+                                {sanitizeExternalUrl(order.externalTrackingUrl) && (
+                                  <a
+                                    href={sanitizeExternalUrl(order.externalTrackingUrl)!}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-emerald-300 hover:text-emerald-200 flex items-center gap-1 font-mono whitespace-nowrap font-semibold"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                    <span>External Tracking</span>
+                                  </a>
+                                )}
+
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -1522,6 +2010,24 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                                     <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
                                   ) : (
                                     <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                                  )}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleGeneratePdfInvoice(order)}
+                                  className="px-3 py-1 rounded-lg bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 text-white text-xs flex items-center gap-1.5 cursor-pointer font-mono font-semibold whitespace-nowrap shadow-sm"
+                                >
+                                  {generatedInvoiceOrderId === order.orderId ? (
+                                    <>
+                                      <Check className="w-3.5 h-3.5 text-emerald-300" />
+                                      <span>PDF Invoice Ready</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <FileText className="w-3.5 h-3.5" />
+                                      <span>Generate PDF Invoice</span>
+                                    </>
                                   )}
                                 </button>
 
@@ -1551,37 +2057,64 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                                   Complete Order Tracking History
                                 </div>
                                 <div className="relative pl-5 space-y-2.5 before:content-[''] before:absolute before:left-[7px] before:top-1.5 before:bottom-1.5 before:w-px before:bg-blue-800/70">
-                                  {trackingEvents.map((evt) => (
-                                    <div key={evt.id} className="relative space-y-0.5 text-xs">
-                                      <span
-                                        aria-hidden="true"
-                                        className={`absolute -left-5 top-1.5 w-3 h-3 rounded-full border-2 ${
-                                          evt.statusType === 'delivered' || evt.statusType === 'approved'
-                                            ? 'bg-emerald-500 border-emerald-200'
-                                            : evt.statusType === 'rejected'
-                                            ? 'bg-red-500 border-red-200'
-                                            : 'bg-blue-500 border-blue-200'
-                                        }`}
-                                      />
-                                      <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <span className="font-semibold text-white">
-                                          {evt.title}{' '}
-                                          <span className="text-[11px] font-mono text-blue-300 font-normal">
-                                            ({evt.stage})
+                                  {trackingEvents.map((evt) => {
+                                    const safeEvtUrl = sanitizeExternalUrl(evt.externalTrackingUrl);
+                                    return (
+                                      <div key={evt.id} className="relative space-y-1 text-xs">
+                                        <span
+                                          aria-hidden="true"
+                                          className={`absolute -left-5 top-1.5 w-3 h-3 rounded-full border-2 ${
+                                            evt.statusType === 'delivered' || evt.statusType === 'approved'
+                                              ? 'bg-emerald-500 border-emerald-200'
+                                              : evt.statusType === 'rejected'
+                                              ? 'bg-red-500 border-red-200'
+                                              : 'bg-blue-500 border-blue-200'
+                                          }`}
+                                        />
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <span className="font-semibold text-white">
+                                            {evt.title}{' '}
+                                            <span className="text-[11px] font-mono text-blue-300 font-normal">
+                                              ({evt.stage})
+                                            </span>
                                           </span>
-                                        </span>
-                                        <span className="text-[11px] font-mono text-slate-400 tabular-nums">
-                                          {evt.dateStr}
-                                        </span>
-                                      </div>
-                                      <p className="text-[11px] text-slate-300">{evt.details}</p>
-                                      {evt.location && (
-                                        <div className="text-[10px] font-mono text-slate-400">
-                                          Hub: {evt.location}
+                                          <span className="text-[11px] font-mono text-slate-400 tabular-nums">
+                                            {evt.dateStr}
+                                          </span>
                                         </div>
-                                      )}
-                                    </div>
-                                  ))}
+                                        <p className="text-[11px] text-slate-300">{evt.details}</p>
+                                        {evt.location && (
+                                          <div className="text-[10px] font-mono text-slate-400">
+                                            Hub: {evt.location}
+                                          </div>
+                                        )}
+                                        {safeEvtUrl && (
+                                          <div className="mt-1 p-2 rounded-lg bg-[#08142b] border border-blue-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                              <Link2 className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+                                              <a
+                                                href={safeEvtUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-[11px] font-mono text-blue-300 hover:text-white underline truncate"
+                                              >
+                                                {safeEvtUrl}
+                                              </a>
+                                            </div>
+                                            <a
+                                              href={safeEvtUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="px-2.5 py-1 rounded bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 text-white text-[10px] font-mono font-bold flex items-center gap-1 whitespace-nowrap shrink-0"
+                                            >
+                                              <span>Open Live Tracking</span>
+                                              <ExternalLink className="w-3 h-3" />
+                                            </a>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             )}

@@ -5,7 +5,7 @@ export const INITIAL_PROFILE: ProfileData = {
   role: "Chief Engineer & Technologist",
   headline: "Founder, CEO & Chief Engineer at SpaceX · CEO & Product Architect at Tesla · Founder of xAI",
   quote: "When something is important enough, you do it even if the odds are not in your favor.",
-  portrait: "/assets/aistudio/OIP__19__b4ca5349.webp",
+  portrait: "/assets/aistudio/elonxx0_53270167.jpg",
   bio: "Elon Musk is an engineer, inventor, and technology entrepreneur leading revolutions in aerospace, sustainable transport, neural interfaces, robotics, and artificial intelligence. Guided by first-principles physics, he has driven the commercialization of reusable orbital rocketry, scaled electric vehicles into global ubiquity, and laid the groundwork for making humanity a multi-planetary civilization.",
   netWorth: "$325 Billion",
   companiesCount: 6,

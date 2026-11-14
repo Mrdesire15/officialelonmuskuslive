@@ -134,7 +134,7 @@ export const InAppInboxModal: React.FC<InAppInboxModalProps> = ({
                 )}
               </div>
               <p className="text-xs text-blue-200/80 font-mono">
-                Direct in-app communication with Executive Concierge & Admin Approval Desk
+                Direct communication with Executive Concierge &amp; Elon Musk Official Management Table
               </p>
             </div>
           </div>
@@ -278,7 +278,7 @@ export const InAppInboxModal: React.FC<InAppInboxModalProps> = ({
                 <div className="flex items-center justify-between pb-3 border-b border-blue-900/60 mb-4">
                   <h4 className="font-bold text-sm text-white flex items-center gap-2">
                     <Mail className="w-4 h-4 text-blue-400" />
-                    <span>Compose In-App Message to Admin Concierge</span>
+                    <span>Compose Message to Official Management Table</span>
                   </h4>
                   <button
                     onClick={() => setIsComposing(false)}
@@ -435,7 +435,7 @@ export const InAppInboxModal: React.FC<InAppInboxModalProps> = ({
                 <Inbox className="w-10 h-10 mx-auto text-blue-400/60 mb-3" />
                 <h4 className="font-bold text-sm text-white mb-1">Select a Message</h4>
                 <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                  Choose a conversation from the left or compose a new inquiry directly to the Admin Desk.
+                  Choose a conversation from the left or compose a new inquiry directly to the Elon Musk Official Management Table.
                 </p>
               </div>
             )}

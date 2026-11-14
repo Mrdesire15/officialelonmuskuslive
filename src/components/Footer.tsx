@@ -1,15 +1,13 @@
 import React from 'react';
-import { ArrowUp, Camera, Sliders, Shield, Mail } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 import { PageId } from '../types';
 
 interface FooterProps {
-  onOpenContentStudio: () => void;
   onOpenRsvp: () => void;
   onSelectPage?: (page: PageId) => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
-  onOpenContentStudio,
   onOpenRsvp,
   onSelectPage,
 }) => {
@@ -33,7 +31,7 @@ export const Footer: React.FC<FooterProps> = ({
               </span>
             </div>
             <p className="text-slate-400 leading-relaxed max-w-sm text-xs">
-              Executive presentation, dynamic photo archive with custom captions, and interactive technical specs for the next generation of American spaceflight and automotive engineering.
+              Executive presentation, curated photo archive, and interactive technical specs for the next generation of American spaceflight and automotive engineering.
             </p>
           </div>
 
@@ -50,17 +48,10 @@ export const Footer: React.FC<FooterProps> = ({
 
             <div className="pt-3 border-t border-blue-900/50 space-y-1">
               <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
-                Customer Service & Executive Support
+                Elon Musk Official Management Table
               </div>
-              <a
-                href="mailto:officialelonmusk076@gmail.com"
-                className="inline-flex items-center gap-1.5 text-blue-300 hover:text-red-300 transition-colors font-mono text-xs font-medium"
-              >
-                <Mail className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                <span>officialelonmusk076@gmail.com</span>
-              </a>
-              <div className="text-[10px] text-slate-500">
-                Direct hotline for VIP passes & vehicle pre-orders
+              <div className="text-[11px] text-slate-400 leading-relaxed">
+                All VIP pass requests, vehicle reservations, and settlement requests are sent directly to the Elon Musk Official Management Table for account provisioning and verification.
               </div>
             </div>
           </div>
@@ -70,13 +61,6 @@ export const Footer: React.FC<FooterProps> = ({
               Quick Portals
             </div>
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={onOpenContentStudio}
-                className="px-3 py-1.5 rounded-lg bg-[#08152e] hover:bg-blue-600/25 text-blue-200 border border-blue-800/60 text-xs transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <Sliders className="w-3.5 h-3.5 text-blue-400" />
-                <span>Content Studio</span>
-              </button>
               <button
                 onClick={onOpenRsvp}
                 className="px-3 py-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/35 text-red-200 border border-red-500/40 text-xs transition-colors cursor-pointer"

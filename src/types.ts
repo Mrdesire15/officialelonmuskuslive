@@ -143,6 +143,7 @@ export interface OrderTrackingEvent {
   timestamp: string;
   dateStr: string;
   statusType: 'submitted' | 'approved' | 'rejected' | 'stage_update' | 'delivered';
+  externalTrackingUrl?: string;
 }
 
 export interface TeslaOrder {
@@ -177,7 +178,11 @@ export interface TeslaOrder {
   approvedAt?: string;
   deliveredAt?: string;
   deliveryDate?: string;
+  externalTrackingUrl?: string;
   trackingHistory?: OrderTrackingEvent[];
+  referralCodeUsed?: string;
+  referralCommissionPercent?: number;
+  referralCommissionAmount?: number;
 }
 
 export interface InAppReply {
@@ -268,6 +273,9 @@ export interface TeslaShareOrder {
   orderDate: string;
   approvalNotes?: string;
   approvedAt?: string;
+  referralCodeUsed?: string;
+  referralCommissionPercent?: number;
+  referralCommissionAmount?: number;
 }
 
 export interface SharePriceAlert {
@@ -280,6 +288,65 @@ export interface SharePriceAlert {
   triggeredPrice?: number;
   note?: string;
 }
+
+export interface VipPassRequest {
+  ticketId: string;
+  tier: 'silver' | 'platinum' | 'gold';
+  tierName: string;
+  price: number;
+  guestName: string;
+  organization?: string;
+  email: string;
+  purpose: string;
+  preferredDate: string;
+  requestedAt: string;
+  orderDate: string;
+  status: 'pending_admin_approval' | 'approved' | 'rejected';
+  approvalNotes?: string;
+  approvedAt?: string;
+  referralCodeUsed?: string;
+  referralCommissionPercent?: number;
+  referralCommissionAmount?: number;
+}
+
+export interface ReferralConversion {
+  id: string;
+  orderId: string;
+  orderType: 'vehicle' | 'shares' | 'vip';
+  itemTitle: string;
+  buyerName: string;
+  referrerCode: string;
+  orderAmount: number;
+  commissionPercent: number;
+  commissionEarned: number;
+  status: 'pending_admin_approval' | 'approved' | 'rejected';
+  createdAt: string;
+  dateStr: string;
+  approvedAt?: string;
+}
+
+export interface PaymentAccountRequest {
+  id: string;
+  paymentMethod: 'wire' | 'gift_card' | 'crypto';
+  vehicleName: string;
+  amountDue: number;
+  visitorName: string;
+  visitorEmail: string;
+  note?: string;
+  status: 'pending_admin' | 'issued';
+  issuedAccountDetails?: string;
+  requestedAt: string;
+  timeStr: string;
+  issuedAt?: string;
+}
+
+export interface AdminPaymentAccounts {
+  wireDetails: string;
+  giftCardInstructions?: string;
+  cryptoAddress: string;
+  updatedAt?: string;
+}
+
 
 export type PageId = 'executive' | 'enterprises' | 'flying-roadster' | 'showroom' | 'shares' | 'gallery';
 

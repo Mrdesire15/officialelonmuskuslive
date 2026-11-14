@@ -3,7 +3,7 @@ import modelSPlaidImg from '../assets/images/car_model_s_plaid_1794559268213.jpg
 import modelSLrImg from '../assets/images/car_model_s_lr_1794559268571.jpg';
 import cybertruckBeastImg from '../assets/images/car_cybertruck_beast_1794559269948.jpg';
 import cybertruckBlackImg from '../assets/images/car_cybertruck_black_1794559270040.jpg';
-import modelXPlaidImg from '../assets/images/car_model_x_plaid_1794559270515.jpg';
+import modelXPlaidImg from '../assets/images/model_x_plaid_clean_1794681492918.jpg';
 import modelXBlueImg from '../assets/images/car_model_x_blue_1794559270966.jpg';
 import model3PerfImg from '../assets/images/car_model_3_perf_1794559271828.jpg';
 import modelYJuniperImg from '../assets/images/car_model_y_juniper_1794559271906.jpg';

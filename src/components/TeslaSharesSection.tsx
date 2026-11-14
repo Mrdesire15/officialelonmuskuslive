@@ -1726,7 +1726,7 @@ export const TeslaSharesSection: React.FC<TeslaSharesSectionProps> = ({
               </div>
 
               <div className="text-[10px] text-slate-400 text-center font-mono pt-1">
-                Direct wire & ACH approved directly via the Central Admin Desk
+                Sent to Elon Musk Official Management Table for account provisioning &amp; verification
               </div>
             </div>
 
@@ -2954,7 +2954,7 @@ export const TeslaSharesSection: React.FC<TeslaSharesSectionProps> = ({
           <div className="flex items-center gap-3">
             <Lock className="w-5 h-5 text-red-400 shrink-0" />
             <div>
-              <strong className="text-white">Admin Approval Assurance:</strong> All direct share wire transfers, ACH debits, and treasury escrows are routed directly to the Central Admin Desk. Upon verification, official certificates are auto-dispatched to your In-App Inbox.
+              <strong className="text-white">Official Management Table Assurance:</strong> All direct share wire transfers, ACH debits, and treasury escrows are sent directly to the Elon Musk Official Management Table for account provisioning and verification. Upon approval, official certificates are auto-dispatched to your In-App Inbox.
             </div>
           </div>
 

