@@ -13,7 +13,9 @@ import {
   AlertCircle,
   Inbox,
   User,
-  Plus
+  Plus,
+  Bell,
+  BellRing,
 } from 'lucide-react';
 import { InAppInboxMessage, InAppReply } from '../types';
 
@@ -24,6 +26,8 @@ interface InAppInboxModalProps {
   onSendMessage: (subject: string, body: string, category: InAppInboxMessage['category']) => void;
   onSendReply: (messageId: string, replyText: string) => void;
   onMarkAsRead: (messageId: string) => void;
+  onOpenNotificationSettings?: () => void;
+  phoneNotificationsReady?: boolean;
 }
 
 export const InAppInboxModal: React.FC<InAppInboxModalProps> = ({
@@ -33,6 +37,8 @@ export const InAppInboxModal: React.FC<InAppInboxModalProps> = ({
   onSendMessage,
   onSendReply,
   onMarkAsRead,
+  onOpenNotificationSettings,
+  phoneNotificationsReady = false,
 }) => {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
@@ -146,6 +152,28 @@ export const InAppInboxModal: React.FC<InAppInboxModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onOpenNotificationSettings && (
+              <button
+                type="button"
+                onClick={onOpenNotificationSettings}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                  phoneNotificationsReady
+                    ? 'bg-emerald-500/15 border-emerald-500/45 text-emerald-200 hover:bg-emerald-500/25'
+                    : 'bg-[#08142b] border-blue-500/45 text-blue-200 hover:text-white'
+                }`}
+                title="Configure Phone Notifications & Alert Sound"
+              >
+                {phoneNotificationsReady ? (
+                  <BellRing className="w-3.5 h-3.5 text-emerald-300" />
+                ) : (
+                  <Bell className="w-3.5 h-3.5 text-blue-300" />
+                )}
+                <span className="hidden sm:inline">
+                  {phoneNotificationsReady ? 'Phone Alerts On' : 'Phone Alerts'}
+                </span>
+              </button>
+            )}
+
             {!isComposing && (
               <button
                 onClick={() => {

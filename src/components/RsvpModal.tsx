@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Calendar, 
@@ -25,6 +25,8 @@ interface RsvpModalProps {
   onOpenInbox?: () => void;
   defaultReferralCode?: string;
   commissionPercent?: number;
+  defaultName?: string;
+  defaultEmail?: string;
 }
 
 export type VipTier = 'silver' | 'platinum' | 'gold';
@@ -97,6 +99,8 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({
   onOpenInbox,
   defaultReferralCode = '',
   commissionPercent = 5,
+  defaultName = '',
+  defaultEmail = '',
 }) => {
   const [selectedTier, setSelectedTier] = useState<VipTier>('gold');
   const [submitted, setSubmitted] = useState(false);
@@ -109,6 +113,12 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({
   const [preferredDate, setPreferredDate] = useState('2026-11-20');
   const [referralCodeInput, setReferralCodeInput] = useState(defaultReferralCode);
   const [ticketId, setTicketId] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (defaultName) setName((prev) => prev || defaultName);
+    if (defaultEmail) setEmail((prev) => prev || defaultEmail);
+  }, [isOpen, defaultName, defaultEmail]);
 
   if (!isOpen) return null;
 

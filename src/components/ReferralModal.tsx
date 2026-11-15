@@ -186,7 +186,7 @@ export const ReferralModal: React.FC<ReferralModalProps> = ({
             </div>
 
             <div className="p-4 rounded-xl bg-[#08142b] border border-blue-900/60">
-              <div className="text-xs text-slate-400">Pending Admin Review</div>
+              <div className="text-xs text-slate-400">Pending Elon Musk Management Review</div>
               <div className="text-2xl font-display font-bold text-white font-mono tabular-nums mt-1">
                 ${pendingTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
@@ -376,7 +376,7 @@ export const ReferralModal: React.FC<ReferralModalProps> = ({
                         {conv.status === 'pending_admin_approval' && (
                           <span className="text-blue-300 flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5" />
-                            <span>Pending Admin</span>
+                            <span>Pending Elon Musk Management</span>
                           </span>
                         )}
                         {conv.status === 'rejected' && (

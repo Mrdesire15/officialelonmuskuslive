@@ -44,8 +44,12 @@ import {
   CharitySupportRequest,
 } from '../types';
 import { REAL_CAR_ASSET_PRESETS } from '../data/teslaVehicles';
-
-const ADMIN_PASSCODE = '0003339999';
+import {
+  clearFailedAttempts,
+  getLockoutStatus,
+  recordFailedAttempt,
+  verifyAdminPasscode,
+} from '../utils/securityLockout';
 
 interface HiddenAdminPortalModalProps {
   isOpen: boolean;
@@ -176,14 +180,29 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handlePasscodeSubmit = (e: React.FormEvent) => {
+  const handlePasscodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passcodeInput.trim() === ADMIN_PASSCODE) {
+    if (getLockoutStatus().isLocked) {
+      onClose();
+      return;
+    }
+
+    const valid = await verifyAdminPasscode(passcodeInput);
+    if (valid) {
+      clearFailedAttempts();
       setIsAuthenticated(true);
       setPasscodeError('');
       onAdminAuthenticated?.();
     } else {
-      setPasscodeError('Incorrect executive passcode. Access denied.');
+      const status = recordFailedAttempt();
+      if (status.isLocked) {
+        onClose();
+        return;
+      }
+      const attemptsWord = status.remainingAttempts === 1 ? 'attempt' : 'attempts';
+      setPasscodeError(
+        `Incorrect executive passcode. Access denied. (${status.remainingAttempts} ${attemptsWord} remaining before a 5-minute site lockout.)`
+      );
     }
   };
 
@@ -201,14 +220,14 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                   Restricted Executive Access
                 </div>
                 <h3 className="font-display font-black text-base text-white">
-                  Admin Portal Verification
+                  Elon Musk Management Verification
                 </h3>
               </div>
             </div>
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close Admin Verification"
+              aria-label="Close Elon Musk Management Verification"
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -217,12 +236,12 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
 
           <form onSubmit={handlePasscodeSubmit} className="p-6 space-y-5">
             <p className="text-xs text-slate-300 leading-relaxed">
-              Enter your executive admin passcode to unlock vehicle listings, payment approvals, and direct inbox management.
+              Enter your Elon Musk Management passcode to unlock vehicle listings, payment approvals, and direct inbox management.
             </p>
 
             <div className="space-y-2">
               <label htmlFor="admin-passcode-input" className="text-xs font-mono font-bold text-blue-200 block">
-                Admin Passcode
+                Elon Musk Management Passcode
               </label>
               <div className="relative">
                 <input
@@ -269,7 +288,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                 className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 text-white text-xs font-bold shadow-md cursor-pointer transition-all flex items-center gap-2"
               >
                 <Lock className="w-3.5 h-3.5" />
-                <span>Unlock Admin Portal</span>
+                <span>Unlock Elon Musk Management Portal</span>
               </button>
             </div>
           </form>
@@ -417,7 +436,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-600/30 text-red-200 border border-red-500/50 font-bold uppercase tracking-wider">
-                  CLASSIFIED ADMIN PORTAL
+                  ELON MUSK MANAGEMENT PORTAL
                 </span>
                 <span className="text-xs font-mono text-blue-300">USA Executive Terminal</span>
               </div>
@@ -430,7 +449,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-2 text-xs font-mono text-slate-300">
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span>Admin Live</span>
+              <span>Elon Musk Management Live</span>
             </div>
             <button
               onClick={onClose}
@@ -614,7 +633,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="p-4 rounded-xl bg-red-950/35 border border-red-500/45">
                 <div className="text-[10px] uppercase font-mono text-red-300 font-bold">
-                  Pending Admin Approval
+                  Pending Elon Musk Management Approval
                 </div>
                 <div className="text-2xl font-bold font-mono tabular-nums text-white mt-1">
                   {approvalCategory === 'vehicles'
@@ -773,7 +792,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                               {isPending && (
                                 <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-red-600/30 text-red-200 border border-red-500 flex items-center gap-1.5">
                                   <AlertTriangle className="w-3.5 h-3.5" />
-                                  Pending Admin Approval
+                                  Pending Elon Musk Management Approval
                                 </span>
                               )}
                               {isApproved && (
@@ -863,7 +882,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                           ) : (
                             <div className="pt-2.5 border-t border-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-400 font-mono">
                               <span className="truncate">
-                                {order.approvalNotes ? `Admin Note: ${order.approvalNotes}` : 'Approved by Elon Musk Official Management Table'}
+                                {order.approvalNotes ? `Elon Musk Management Note: ${order.approvalNotes}` : 'Approved by Elon Musk Official Management Table'}
                               </span>
                               <div className="flex items-center gap-2 shrink-0">
                                 {isApproved && onUpdateOrderStatus && (
@@ -1050,7 +1069,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                           ) : (
                             <div className="pt-2 border-t border-blue-900/50 flex items-center justify-between text-[11px] text-slate-400 font-mono">
                               <span>
-                                {shareOrder.approvalNotes ? `Admin Note: ${shareOrder.approvalNotes}` : 'Approved by Elon Musk Official Management Table'}
+                                {shareOrder.approvalNotes ? `Elon Musk Management Note: ${shareOrder.approvalNotes}` : 'Approved by Elon Musk Official Management Table'}
                               </span>
                               <span className="text-blue-300">
                                 {shareOrder.approvedAt ? `Executed: ${new Date(shareOrder.approvedAt).toLocaleDateString()}` : 'Dispatched to In-App Inbox'}
@@ -1113,7 +1132,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                               {isPending && (
                                 <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-red-600/30 text-red-200 border border-red-500 flex items-center gap-1.5">
                                   <AlertTriangle className="w-3.5 h-3.5" />
-                                  Pending Admin Approval
+                                  Pending Elon Musk Management Approval
                                 </span>
                               )}
                               {isApproved && (
@@ -1186,7 +1205,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                           ) : (
                             <div className="pt-2 border-t border-blue-900/50 flex items-center justify-between text-[11px] text-slate-400 font-mono">
                               <span>
-                                {vipReq.approvalNotes ? `Admin Note: ${vipReq.approvalNotes}` : 'Reviewed by Elon Musk Official Management Table'}
+                                {vipReq.approvalNotes ? `Elon Musk Management Note: ${vipReq.approvalNotes}` : 'Reviewed by Elon Musk Official Management Table'}
                               </span>
                               <span className="text-blue-300">
                                 {vipReq.approvedAt ? `Cleared: ${new Date(vipReq.approvedAt).toLocaleDateString()}` : 'Dispatched to In-App Inbox'}
@@ -1419,7 +1438,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                                 }`}
                               >
                                 {isPending
-                                  ? 'Pending Admin Approval'
+                                  ? 'Pending Elon Musk Management Approval'
                                   : isApproved
                                   ? 'Approved Donation'
                                   : 'Rejected'}
@@ -1661,7 +1680,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
               {customCars.length > 0 && (
                 <div className="pt-6 border-t border-blue-900/60 space-y-3">
                   <h5 className="text-xs font-mono font-bold text-slate-400 uppercase">
-                    Admin-Created Custom Models ({customCars.length})
+                    Elon Musk Management Custom Models ({customCars.length})
                   </h5>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {customCars.map((c) => (
@@ -1784,7 +1803,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                   >
                     <input
                       type="text"
-                      placeholder="Type admin executive reply (visitor receives this in their in-app inbox)..."
+                      placeholder="Type Elon Musk Management reply (visitor receives this in their in-app inbox)..."
                       value={adminReplyText}
                       onChange={(e) => setAdminReplyText(e.target.value)}
                       className="flex-1 px-4 py-2.5 rounded-xl bg-[#040a18] border border-blue-900/70 text-xs text-white focus:outline-none focus:border-blue-400 placeholder:text-slate-500"
@@ -1795,7 +1814,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                       className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 disabled:opacity-40 text-white text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-1.5"
                     >
                       <Send className="w-3.5 h-3.5" />
-                      <span>Send Admin Reply</span>
+                      <span>Send Management Reply</span>
                     </button>
                   </form>
                 </div>
@@ -2037,7 +2056,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h4 className="font-bold text-sm text-white">
-                    Active Admin-Provided Payment Accounts
+                    Active Elon Musk Management Payment Accounts
                   </h4>
                   <p className="text-xs text-slate-300 mt-0.5">
                     Leave blank to require visitors to request an account per order, or enter official details below to publish directly to checkout.
@@ -2140,7 +2159,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                   Visitor Account Requests ({paymentAccountRequests.length})
                 </h4>
                 <span className="text-xs font-mono text-slate-400">
-                  {pendingAccountRequests.length} awaiting admin issuance
+                  {pendingAccountRequests.length} awaiting Elon Musk Management issuance
                 </span>
               </div>
 
@@ -2197,7 +2216,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                                 : 'bg-emerald-950/70 text-emerald-300 border border-emerald-500/45'
                             }`}
                           >
-                            {isPending ? 'Pending Admin Account' : 'Account Issued'}
+                            {isPending ? 'Pending Management Account' : 'Account Issued'}
                           </span>
                         </div>
 
@@ -2250,14 +2269,14 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
         <div className="p-3 px-5 border-t border-blue-900/60 bg-[#050d20] flex items-center justify-between text-xs text-slate-400 font-mono shrink-0">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-red-500" />
-            <span>Executive Admin Mode Active (Protected by 10-digit executive passcode)</span>
+            <span>Elon Musk Management Mode Active (Protected by 10-digit executive passcode)</span>
           </div>
 
           <button
             onClick={onClose}
             className="px-4 py-1.5 rounded-lg border border-blue-800 bg-[#08142b] text-slate-200 hover:text-white hover:border-blue-500 cursor-pointer transition-colors"
           >
-            Exit Admin Portal
+            Exit Management Portal
           </button>
         </div>
 

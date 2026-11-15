@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   X,
   HeartHandshake,
@@ -20,6 +20,10 @@ import {
   Landmark,
   FileText,
   XCircle,
+  History,
+  MapPin,
+  Zap,
+  ArrowDown,
 } from 'lucide-react';
 import {
   AdminPaymentAccounts,
@@ -28,7 +32,8 @@ import {
   CrisisCategory,
   PaymentAccountRequest,
 } from '../types';
-import { CHARITY_NGO_SECTIONS, CRISIS_COUNTRIES } from '../data/charityData';
+import { CHARITY_NGO_SECTIONS, CONTINENT_RELIEF_HUBS, CRISIS_COUNTRIES } from '../data/charityData';
+import { CharityReliefGlobe } from './CharityReliefGlobe';
 
 interface CharityDonationModalProps {
   isOpen: boolean;
@@ -49,9 +54,12 @@ interface CharityDonationModalProps {
     requestCategory?: 'vehicle' | 'charity_donation' | 'charity_support';
   }) => PaymentAccountRequest;
   onOpenInbox?: () => void;
+  defaultVisitorName?: string;
+  defaultVisitorEmail?: string;
 }
 
 const PRESET_AMOUNTS = [50, 100, 250, 500, 1000, 5000];
+const QUICK_DONATE_AMOUNTS = [50, 100, 500] as const;
 const REGIONS = ['All', 'Global', 'Europe & Eurasia', 'Middle East', 'Africa', 'Asia-Pacific', 'Americas'] as const;
 const CRISIS_FILTERS: Array<'All' | CrisisCategory> = [
   'All',
@@ -71,8 +79,10 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
   paymentAccountRequests = [],
   onRequestPaymentAccount,
   onOpenInbox,
+  defaultVisitorName = '',
+  defaultVisitorEmail = '',
 }) => {
-  const [activeTab, setActiveTab] = useState<'donate' | 'support' | 'history'>('donate');
+  const [activeTab, setActiveTab] = useState<'donate' | 'support' | 'donation_history' | 'history'>('donate');
 
   // Shared Country / NGO selection state
   const [selectedNgoId, setSelectedNgoId] = useState<string>(CHARITY_NGO_SECTIONS[0].id);
@@ -84,6 +94,10 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
   // Fan Donation form state
   const [donationAmount, setDonationAmount] = useState<number>(250);
   const [customAmountInput, setCustomAmountInput] = useState<string>('250');
+  const [isQuickCustomOpen, setIsQuickCustomOpen] = useState<boolean>(false);
+  const donationFormRef = useRef<HTMLFormElement | null>(null);
+  const quickCustomInputRef = useRef<HTMLInputElement | null>(null);
+  const formCustomInputRef = useRef<HTMLInputElement | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'wire' | 'gift_card' | 'crypto'>('wire');
   const [accountRequestNote, setAccountRequestNote] = useState<string>('');
   const [copiedAccount, setCopiedAccount] = useState<boolean>(false);
@@ -107,6 +121,23 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
   const [needsAccountProvisioning, setNeedsAccountProvisioning] = useState<boolean>(true);
   const [preferredPayoutMethod, setPreferredPayoutMethod] = useState<'wire' | 'gift_card' | 'crypto'>('wire');
   const [submittedSupport, setSubmittedSupport] = useState<CharitySupportRequest | null>(null);
+  const [failedImgKeys, setFailedImgKeys] = useState<Record<string, boolean>>({});
+
+  const markImgFailed = (key: string) => {
+    setFailedImgKeys((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (defaultVisitorName) {
+      setDonorName((prev) => prev || defaultVisitorName);
+      setApplicantName((prev) => prev || defaultVisitorName);
+    }
+    if (defaultVisitorEmail) {
+      setDonorEmail((prev) => prev || defaultVisitorEmail);
+      setApplicantEmail((prev) => prev || defaultVisitorEmail);
+    }
+  }, [isOpen, defaultVisitorName, defaultVisitorEmail]);
 
   const filteredCountries = useMemo(() => {
     const query = countrySearch.trim().toLowerCase();
@@ -122,6 +153,25 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
     });
   }, [regionFilter, crisisFilter, countrySearch]);
 
+  const approvedDonations = useMemo(() => {
+    return donations
+      .filter((d) => d.status === 'approved')
+      .slice()
+      .sort((a, b) => {
+        const aTime = new Date(a.approvedAt || a.submittedAt).getTime();
+        const bTime = new Date(b.approvedAt || b.submittedAt).getTime();
+        return bTime - aTime;
+      });
+  }, [donations]);
+
+  const totalApprovedUsd = useMemo(() => {
+    return approvedDonations.reduce((sum, d) => sum + d.amountUsd, 0);
+  }, [approvedDonations]);
+
+  const approvedCountriesCount = useMemo(() => {
+    return new Set(approvedDonations.map((d) => d.countryName)).size;
+  }, [approvedDonations]);
+
   if (!isOpen) return null;
 
   const selectedNgo =
@@ -134,6 +184,22 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
     const found = CRISIS_COUNTRIES.find((c) => c.id === countryId);
     if (found) {
       setSupportCrisisType(found.crisisType);
+    }
+  };
+
+  const handleSelectContinentHub = (region: string) => {
+    const nextRegion = regionFilter === region ? 'All' : region;
+    setRegionFilter(nextRegion);
+    if (nextRegion !== 'All') {
+      const currentMatch = CRISIS_COUNTRIES.find(
+        (c) => c.id === selectedCountryId && c.region === nextRegion
+      );
+      if (!currentMatch) {
+        const firstInRegion = CRISIS_COUNTRIES.find((c) => c.region === nextRegion);
+        if (firstInRegion) {
+          handleSelectCountry(firstInRegion.id);
+        }
+      }
     }
   };
 
@@ -276,7 +342,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
 
         {/* Sub-navigation tabs */}
         <div className="px-4 sm:px-6 py-2.5 border-b border-blue-900/60 bg-[#050d20] flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-[#040a18] border border-blue-900/60">
+          <div className="flex flex-wrap items-center gap-1 p-1 rounded-xl bg-[#040a18] border border-blue-900/60">
             <button
               type="button"
               onClick={() => {
@@ -307,6 +373,19 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
             >
               <Globe className="w-3.5 h-3.5" />
               <span>Request Country Support</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('donation_history')}
+              className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1.5 tabular-nums ${
+                activeTab === 'donation_history'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>Donation History ({approvedDonations.length})</span>
             </button>
 
             <button
@@ -345,7 +424,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                   <p className="text-xs text-slate-300 leading-relaxed">
                     Thank you, <strong className="text-white">{submittedDonation.donorName}</strong>. Your philanthropic contribution of{' '}
                     <strong className="text-white font-mono tabular-nums">${submittedDonation.amountUsd.toLocaleString()} USD</strong> for{' '}
-                    <strong className="text-blue-200">{submittedDonation.countryName}</strong> has been directed to the Admin Management Table for settlement verification, account provisioning, and official NGO receipt approval.
+                    <strong className="text-blue-200">{submittedDonation.countryName}</strong> has been directed to Elon Musk Management for settlement verification, account provisioning, and official NGO receipt approval.
                   </p>
                 </div>
               </div>
@@ -365,7 +444,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                 </div>
                 <div>
                   <div className="text-slate-400">Management Status</div>
-                  <div className="font-mono text-amber-300 mt-0.5">Pending Admin Approval</div>
+                  <div className="font-mono text-amber-300 mt-0.5">Pending Elon Musk Management Approval</div>
                 </div>
               </div>
 
@@ -411,7 +490,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                     Support Request Directed to Elon Musk Management for Approval &amp; Accounts Provision
                   </h4>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    Your humanitarian support filing for <strong className="text-white">{submittedSupport.countryName}</strong> ({submittedSupport.cityOrZone}) has been submitted to the <strong className="text-blue-200">Elon Musk Official Management Table</strong>. All support requests require direct Admin approval and account/relief provisioning prior to dispatch.
+                    Your humanitarian support filing for <strong className="text-white">{submittedSupport.countryName}</strong> ({submittedSupport.cityOrZone}) has been submitted to the <strong className="text-blue-200">Elon Musk Official Management Table</strong>. All support requests require direct Elon Musk Management approval and account/relief provisioning prior to dispatch.
                   </p>
                 </div>
               </div>
@@ -471,17 +550,208 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                 </button>
               </div>
             </div>
+          ) : activeTab === 'donation_history' ? (
+            <div className="space-y-6">
+              {/* Dedicated Donation History Section (Approved Donations Only) */}
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-blue-900/60 pb-3">
+                <div>
+                  <div className="text-[11px] font-mono text-emerald-300 uppercase tracking-wider">
+                    Verified Humanitarian Contributions
+                  </div>
+                  <h4 className="font-display font-bold text-lg text-white">
+                    Donation History
+                  </h4>
+                </div>
+                <span className="text-xs font-mono text-slate-400">
+                  Approved by Elon Musk Official Management Table
+                </span>
+              </div>
+
+              {/* Approved Donations Summary Metrics */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-4 rounded-xl bg-[#08142b] border border-blue-900/70">
+                  <div className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
+                    Approved Donations
+                  </div>
+                  <div className="mt-1 font-display font-bold text-2xl text-white tabular-nums">
+                    {approvedDonations.length}
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl bg-[#08142b] border border-emerald-500/35">
+                  <div className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
+                    Total Approved Amount
+                  </div>
+                  <div className="mt-1 font-mono font-bold text-2xl text-emerald-300 tabular-nums">
+                    ${totalApprovedUsd.toLocaleString()} USD
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl bg-[#08142b] border border-blue-900/70">
+                  <div className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
+                    Destination Countries Funded
+                  </div>
+                  <div className="mt-1 font-display font-bold text-2xl text-blue-200 tabular-nums">
+                    {approvedCountriesCount}
+                  </div>
+                </div>
+              </div>
+
+              {/* Approved Donations List */}
+              {approvedDonations.length === 0 ? (
+                <div className="p-8 rounded-2xl bg-[#08142b] border border-blue-900/60 text-center space-y-3">
+                  <History className="w-8 h-8 text-blue-300/70 mx-auto" />
+                  <div className="space-y-1">
+                    <h5 className="font-display font-bold text-sm text-white">
+                      No Approved Donations Recorded Yet
+                    </h5>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                      Once a charity contribution is reviewed and cleared by the Elon Musk Official Management Table, it will appear in your Donation History with its verified status, amount, and destination country.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('donate')}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-red-600 text-white text-xs font-bold cursor-pointer whitespace-nowrap shrink-0"
+                    >
+                      Make a Fan NGO Donation
+                    </button>
+                    {donations.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('history')}
+                        className="px-4 py-2 rounded-xl bg-[#040a18] border border-blue-700/60 text-blue-200 hover:text-white text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0"
+                      >
+                        View Pending Submissions ({donations.length})
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {approvedDonations.map((d) => {
+                    const matchedCountry = CRISIS_COUNTRIES.find((c) => c.id === d.countryId);
+                    const approvedDateDisplay = d.approvedAt
+                      ? new Date(d.approvedAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })
+                      : d.dateStr;
+                    const channelLabel =
+                      d.paymentMethod === 'wire'
+                        ? 'Wire Transfer / ACH'
+                        : d.paymentMethod === 'gift_card'
+                        ? 'Gift Card'
+                        : 'Crypto (BTC / DOGE / USDC)';
+
+                    return (
+                      <div
+                        key={d.donationId}
+                        className="p-4 rounded-xl bg-[#08142b] border border-emerald-500/35 space-y-3"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400">
+                              <span className="text-blue-300 font-bold">{d.donationId}</span>
+                              <span aria-hidden="true">·</span>
+                              <span className="tabular-nums">Submitted {d.dateStr}</span>
+                              <span aria-hidden="true">·</span>
+                              <span className="tabular-nums text-emerald-300">
+                                Approved {approvedDateDisplay}
+                              </span>
+                            </div>
+                            <div className="text-sm font-bold text-white">
+                              {d.ngoSectionName}
+                            </div>
+                          </div>
+
+                          <div className="flex sm:flex-col sm:items-end justify-between gap-1 shrink-0">
+                            <div className="font-mono font-bold text-lg text-emerald-300 tabular-nums">
+                              ${d.amountUsd.toLocaleString()} USD
+                            </div>
+                            <div className="text-xs font-mono font-semibold text-emerald-400 flex items-center gap-1.5">
+                              <CheckCircle2 className="w-4 h-4 shrink-0" />
+                              <span>Approved</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-3 rounded-lg bg-[#040a18] border border-blue-900/60 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                          <div>
+                            <div className="text-[11px] text-slate-400">Destination Country</div>
+                            <div className="font-semibold text-white mt-0.5 flex items-center gap-1.5">
+                              <MapPin className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                              <span>{d.countryName}</span>
+                            </div>
+                            {matchedCountry && (
+                              <div className="text-[11px] font-mono text-blue-300 mt-0.5">
+                                {matchedCountry.continent} · {d.crisisType}
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <div className="text-[11px] text-slate-400">Approval Status</div>
+                            <div className="font-semibold text-emerald-300 mt-0.5">
+                              Approved by Elon Musk Management
+                            </div>
+                            <div className="text-[11px] font-mono text-slate-400 mt-0.5 tabular-nums">
+                              Cleared {approvedDateDisplay}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-[11px] text-slate-400">Settlement Channel &amp; Ref</div>
+                            <div className="font-semibold text-slate-200 mt-0.5">{channelLabel}</div>
+                            <div className="text-[11px] font-mono text-blue-300 mt-0.5">
+                              {d.paymentReference}
+                            </div>
+                          </div>
+                        </div>
+
+                        {(d.dedicationNote || d.approvalNotes) && (
+                          <div className="space-y-1 text-xs text-slate-300">
+                            {d.dedicationNote && (
+                              <div>
+                                <span className="text-slate-400">Dedication Note:</span> {d.dedicationNote}
+                              </div>
+                            )}
+                            {d.approvalNotes && (
+                              <div>
+                                <span className="text-emerald-300 font-semibold">Management Clearance Note:</span>{' '}
+                                {d.approvalNotes}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           ) : activeTab === 'history' ? (
             <div className="space-y-6">
               {/* Fan Donations History */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between border-b border-blue-900/60 pb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-900/60 pb-2">
                   <h4 className="font-display font-bold text-base text-white">
                     Your Charity NGO Donations ({donations.length})
                   </h4>
-                  <span className="text-xs font-mono text-slate-400">
-                    Managed by Elon Musk Official Management Table
-                  </span>
+                  <div className="flex items-center gap-3">
+                    {approvedDonations.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('donation_history')}
+                        className="text-xs font-semibold text-emerald-300 hover:text-emerald-200 underline underline-offset-2 cursor-pointer"
+                      >
+                        View Approved Donation History ({approvedDonations.length})
+                      </button>
+                    )}
+                    <span className="text-xs font-mono text-slate-400">
+                      Managed by Elon Musk Official Management Table
+                    </span>
+                  </div>
                 </div>
 
                 {donations.length === 0 ? (
@@ -532,7 +802,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                           ) : (
                             <span className="text-amber-300 flex items-center gap-1.5">
                               <Clock className="w-4 h-4" />
-                              Pending Admin Approval
+                              Pending Elon Musk Management Approval
                             </span>
                           )}
                         </div>
@@ -549,7 +819,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                     Humanitarian &amp; Country Support Requests ({supportRequests.length})
                   </h4>
                   <span className="text-xs font-mono text-slate-400">
-                    Admin Approval &amp; Accounts Provisioning
+                    Elon Musk Management Approval &amp; Accounts Provisioning
                   </span>
                 </div>
 
@@ -599,7 +869,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                             ) : (
                               <span className="text-amber-300 flex items-center gap-1.5">
                                 <Clock className="w-4 h-4" />
-                                Pending Admin Approval
+                                Pending Elon Musk Management Approval
                               </span>
                             )}
                           </div>
@@ -627,6 +897,93 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
             </div>
           ) : (
             <div className="space-y-6">
+              {/* Quick Donate Bar (Above Donation Form) */}
+              {activeTab === 'donate' && (
+                <div className="p-3.5 sm:p-4 rounded-xl bg-[#08142b] border border-blue-500/40 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-white uppercase tracking-wider">
+                      <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>Quick Donate</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 mt-0.5 truncate">
+                      Selected: <span className="font-mono font-semibold text-emerald-300 tabular-nums">${donationAmount.toLocaleString()} USD</span> → {selectedCountry.name}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {QUICK_DONATE_AMOUNTS.map((amt) => {
+                      const isActive = !isQuickCustomOpen && donationAmount === amt;
+                      return (
+                        <button
+                          key={`quick-donate-${amt}`}
+                          type="button"
+                          onClick={() => {
+                            setIsQuickCustomOpen(false);
+                            setDonationAmount(amt);
+                            setCustomAmountInput(String(amt));
+                          }}
+                          className={`px-3.5 py-2 rounded-lg border text-xs font-mono font-bold tabular-nums transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                            isActive
+                              ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white border-blue-400 shadow-sm'
+                              : 'bg-[#040a18] border-blue-900/70 text-slate-200 hover:border-blue-500/70 hover:text-white'
+                          }`}
+                        >
+                          ${amt.toLocaleString()}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsQuickCustomOpen(true);
+                        window.setTimeout(() => {
+                          quickCustomInputRef.current?.focus();
+                          quickCustomInputRef.current?.select();
+                        }, 0);
+                      }}
+                      className={`px-3.5 py-2 rounded-lg border text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                        isQuickCustomOpen || !QUICK_DONATE_AMOUNTS.includes(donationAmount as 50 | 100 | 500)
+                          ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white border-blue-400 shadow-sm'
+                          : 'bg-[#040a18] border-blue-900/70 text-slate-200 hover:border-blue-500/70 hover:text-white'
+                      }`}
+                    >
+                      Custom
+                    </button>
+
+                    {isQuickCustomOpen && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-mono text-slate-400">$</span>
+                        <input
+                          ref={quickCustomInputRef}
+                          type="number"
+                          min={5}
+                          step="1"
+                          aria-label="Custom quick donation amount in USD"
+                          value={customAmountInput}
+                          onChange={(e) => handleAmountChange(e.target.value)}
+                          className="w-24 px-2.5 py-1.5 text-xs bg-[#040a18] border border-blue-500/70 rounded-lg text-white font-mono tabular-nums focus:outline-none focus:border-blue-400"
+                        />
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        donationFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        if (isQuickCustomOpen) {
+                          window.setTimeout(() => formCustomInputRef.current?.focus(), 300);
+                        }
+                      }}
+                      className="px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/35 border border-blue-500/45 text-blue-200 hover:text-white text-xs font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0 transition-colors"
+                    >
+                      <span>Donation Form</span>
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Step 1: Official Elon Musk Charity NGO Sections */}
               <div className="space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
@@ -674,15 +1031,77 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                 </div>
               </div>
 
-              {/* Step 2: Countries Worldwide in Need (War & Terrorism Zones) */}
-              <div className="space-y-3">
+              {/* Step 2: Continents & Countries Worldwide in Need (War & Terrorism Zones) */}
+              <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                    2. Worldwide Countries in Need (War &amp; Terrorism Relief)
+                    2. Relief Operations by Continent &amp; Country (War &amp; Terrorism Aid)
                   </h4>
                   <span className="text-xs font-mono text-blue-300 tabular-nums">
                     {filteredCountries.length} of {CRISIS_COUNTRIES.length} Crisis Regions Shown
                   </span>
+                </div>
+
+                {/* 3D Interactive D3.js Humanitarian Operations Globe */}
+                <CharityReliefGlobe
+                  selectedCountryId={selectedCountryId}
+                  regionFilter={regionFilter}
+                  onSelectCountry={handleSelectCountry}
+                  onSelectRegion={handleSelectContinentHub}
+                  donations={donations}
+                  supportRequests={supportRequests}
+                />
+
+                {/* Continent Visual Operations Gallery */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                  {CONTINENT_RELIEF_HUBS.map((hub) => {
+                    const isActive = regionFilter === hub.region;
+                    const countInRegion = CRISIS_COUNTRIES.filter((c) => c.region === hub.region).length;
+                    const imgFailed = !!failedImgKeys[hub.id];
+                    return (
+                      <button
+                        key={hub.id}
+                        type="button"
+                        onClick={() => handleSelectContinentHub(hub.region)}
+                        className={`group rounded-xl border overflow-hidden text-left transition-all cursor-pointer bg-[#040a18] ${
+                          isActive
+                            ? 'border-red-400 ring-1 ring-red-400/60 shadow-md'
+                            : 'border-blue-900/60 hover:border-blue-500/70'
+                        }`}
+                      >
+                        <div className="relative aspect-[16/10] w-full overflow-hidden bg-[#08142b]">
+                          {!imgFailed ? (
+                            <img
+                              src={hub.image}
+                              alt={`${hub.continentName} humanitarian relief operations`}
+                              referrerPolicy="no-referrer"
+                              onError={() => markImgFailed(hub.id)}
+                              className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-[#0a1d42] to-[#1e0b18] flex items-center justify-center">
+                              <Globe className="w-6 h-6 text-blue-300/70" />
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-[#040a18] via-[#040a18]/35 to-transparent" />
+                          <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between gap-1">
+                            <span className="text-[11px] font-bold text-white leading-tight truncate">
+                              {hub.continentName}
+                            </span>
+                            {isActive && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                          </div>
+                        </div>
+                        <div className="p-2 space-y-0.5">
+                          <div className="text-[10px] font-mono text-blue-300 tabular-nums truncate">
+                            {countInRegion} {countInRegion === 1 ? 'Zone' : 'Nations'} · Active
+                          </div>
+                          <div className="text-[10px] text-slate-400 truncate">
+                            {hub.flagshipOperations}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {/* Search & Filters */}
@@ -693,7 +1112,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                       type="text"
                       value={countrySearch}
                       onChange={(e) => setCountrySearch(e.target.value)}
-                      placeholder="Search any country in need (e.g. Ukraine, Gaza, Sudan, Somalia, Nigeria, Haiti, Myanmar)..."
+                      placeholder="Search any country or continent in need (e.g. Ukraine, Gaza, Sudan, Africa, Asia, Haiti)..."
                       className="w-full pl-9 pr-3.5 py-2.5 text-xs bg-[#040a18] border border-blue-900/70 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
                     />
                   </div>
@@ -734,8 +1153,8 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                   ))}
                 </div>
 
-                {/* Country Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-64 overflow-y-auto pr-1">
+                {/* Country Grid with Country & Continent Relief Photography */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pr-1">
                   {filteredCountries.length === 0 ? (
                     <div className="sm:col-span-2 lg:col-span-3 p-6 rounded-xl bg-[#040a18] border border-blue-900/60 text-center text-xs text-slate-400">
                       No matching countries found. Clear filters or switch to Support Request to submit a regional relief appeal.
@@ -743,54 +1162,117 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                   ) : (
                     filteredCountries.map((country) => {
                       const isSelected = country.id === selectedCountryId;
+                      const imgFailed = !!failedImgKeys[`country-${country.id}`];
                       return (
                         <button
                           key={country.id}
                           type="button"
                           onClick={() => handleSelectCountry(country.id)}
-                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer space-y-1.5 ${
+                          className={`group rounded-xl border overflow-hidden text-left transition-all cursor-pointer flex flex-col ${
                             isSelected
-                              ? 'bg-[#0a1a38] border-red-400 shadow-sm'
-                              : 'bg-[#040a18] border-blue-900/60 hover:border-blue-600/60'
+                              ? 'bg-[#0a1a38] border-red-400 ring-1 ring-red-400/50 shadow-md'
+                              : 'bg-[#040a18] border-blue-900/60 hover:border-blue-500/70'
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="text-xs font-bold text-white leading-snug">
-                              {country.name}
-                            </span>
-                            {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />}
+                          <div className="relative h-28 w-full overflow-hidden bg-[#08142b] shrink-0">
+                            {!imgFailed ? (
+                              <img
+                                src={country.image}
+                                alt={`${country.name} humanitarian aid mission`}
+                                referrerPolicy="no-referrer"
+                                onError={() => markImgFailed(`country-${country.id}`)}
+                                className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gradient-to-br from-[#0b1f44] to-[#230c18] flex items-center justify-center">
+                                <HeartHandshake className="w-7 h-7 text-blue-300/65" />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#040a18] via-[#040a18]/30 to-transparent" />
+                            <div className="absolute bottom-2 left-3 right-3 flex items-end justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="text-[10px] font-mono text-blue-200 truncate">
+                                  {country.continent}
+                                </div>
+                                <div className="text-xs font-bold text-white leading-snug truncate">
+                                  {country.name}
+                                </div>
+                              </div>
+                              {isSelected && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
+                            </div>
                           </div>
-                          <div className="text-[11px] font-mono text-slate-400">
-                            {country.region} ·{' '}
-                            <span className={country.crisisType === 'Terrorism & Insurgency' ? 'text-amber-300' : 'text-red-300'}>
-                              {country.crisisType}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-300 leading-snug line-clamp-2">
-                            {country.urgentNeeds}
-                          </p>
-                          <div className="text-[10px] font-mono text-blue-300 tabular-nums">
-                            {country.displacedEstimate}
+
+                          <div className="p-3 space-y-1.5 flex-1 flex flex-col justify-between">
+                            <div className="space-y-1">
+                              <div className="text-[11px] font-mono text-slate-400">
+                                {country.region} ·{' '}
+                                <span
+                                  className={
+                                    country.crisisType === 'Terrorism & Insurgency'
+                                      ? 'text-amber-300'
+                                      : 'text-red-300'
+                                  }
+                                >
+                                  {country.crisisType}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-300 leading-snug line-clamp-2">
+                                {country.urgentNeeds}
+                              </p>
+                            </div>
+                            <div className="text-[10px] font-mono text-blue-300 tabular-nums pt-1 border-t border-blue-900/40">
+                              {country.displacedEstimate}
+                            </div>
                           </div>
                         </button>
                       );
                     })
                   )}
                 </div>
+
+                {/* Selected Country & Continent Visual Field Brief */}
+                <div className="rounded-xl bg-[#040a18] border border-blue-800/70 overflow-hidden flex flex-col sm:flex-row">
+                  <div className="relative sm:w-56 aspect-[16/10] sm:aspect-auto sm:min-h-[120px] shrink-0 bg-[#08142b]">
+                    {!failedImgKeys[`spotlight-${selectedCountry.id}`] ? (
+                      <img
+                        src={selectedCountry.image}
+                        alt={`${selectedCountry.name} active humanitarian deployment`}
+                        referrerPolicy="no-referrer"
+                        onError={() => markImgFailed(`spotlight-${selectedCountry.id}`)}
+                        className="w-full h-full object-cover object-center"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-[#0b1f44] to-[#230c18] flex items-center justify-center">
+                        <Globe className="w-7 h-7 text-blue-300/70" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t sm:bg-gradient-to-r from-[#040a18]/80 via-transparent to-transparent" />
+                  </div>
+                  <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-center gap-1.5 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-mono text-[11px] text-blue-300">
+                        Active Target · {selectedCountry.continent} · {selectedCountry.region}
+                      </span>
+                      <span className="font-mono text-[11px] text-red-300">
+                        {selectedCountry.crisisType}
+                      </span>
+                    </div>
+                    <div className="font-display font-bold text-sm text-white">
+                      {selectedCountry.name} — {selectedNgo.name}
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      {selectedCountry.urgentNeeds}
+                    </p>
+                    <div className="text-[11px] font-mono text-emerald-300 tabular-nums">
+                      Affected Population: {selectedCountry.displacedEstimate}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* TAB 1: FAN CHARITY DONATION FORM */}
               {activeTab === 'donate' && (
-                <form onSubmit={handleDonationSubmit} className="space-y-5 pt-2 border-t border-blue-900/60">
-                  <div className="p-4 rounded-xl bg-[#040a18] border border-blue-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                    <div>
-                      <span className="text-slate-400">Selected Allocation Target: </span>
-                      <strong className="text-white">{selectedNgo.name}</strong>
-                      <span className="text-slate-500"> · </span>
-                      <strong className="text-blue-300">{selectedCountry.name}</strong>
-                    </div>
-                    <span className="font-mono text-red-300">{selectedCountry.crisisType}</span>
-                  </div>
+                <form ref={donationFormRef} onSubmit={handleDonationSubmit} className="space-y-5 pt-2 border-t border-blue-900/60">
 
                   {/* Amount & Payment Channel */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -804,6 +1286,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                             key={amt}
                             type="button"
                             onClick={() => {
+                              setIsQuickCustomOpen(false);
                               setDonationAmount(amt);
                               setCustomAmountInput(String(amt));
                             }}
@@ -820,6 +1303,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-mono text-slate-400">Custom USD:</span>
                         <input
+                          ref={formCustomInputRef}
                           type="number"
                           min={5}
                           step="1"
@@ -832,7 +1316,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
 
                     <div className="space-y-3">
                       <label className="text-xs font-bold text-white uppercase tracking-wider block">
-                        4. Select Payment Channel (Admin Accounts Provision)
+                        4. Select Payment Channel (Elon Musk Management Provision)
                       </label>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <button
@@ -876,7 +1360,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-semibold text-white flex items-center gap-1.5">
                               <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                              <span>Admin-Provisioned Charity Account</span>
+                              <span>Elon Musk Management-Provisioned Charity Account</span>
                             </span>
                             <button
                               type="button"
@@ -902,7 +1386,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                               <Clock className="w-4 h-4 text-blue-400" />
                               <span>Charity Account Requested ({pendingAccountReq.id})</span>
                             </span>
-                            <span className="text-[11px] font-mono text-blue-300">Pending Admin</span>
+                            <span className="text-[11px] font-mono text-blue-300">Pending Elon Musk Management</span>
                           </div>
                           <p className="text-[11px] text-slate-300 leading-relaxed">
                             Sent to the Elon Musk Official Management Table for account provisioning. Once issued, the account appears here and in your In-App Inbox.
@@ -912,7 +1396,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                         <div className="p-3.5 rounded-xl bg-[#08142b] border border-blue-900/70 text-xs space-y-2.5">
                           <div className="flex items-center gap-2 font-semibold text-white">
                             <Lock className="w-4 h-4 text-red-400" />
-                            <span>Request Charity Settlement Account from Admin</span>
+                            <span>Request Charity Settlement Account from Elon Musk Management</span>
                           </div>
                           <p className="text-[11px] text-slate-300 leading-relaxed">
                             All charity settlement accounts are provisioned directly by the Elon Musk Official Management Table. Request an account below or submit your donation pledge for approval and provisioning.
@@ -942,7 +1426,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                               className="px-3.5 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
                             >
                               <Send className="w-3.5 h-3.5" />
-                              <span>Request Account from Admin</span>
+                              <span>Request Account from Elon Musk Management</span>
                             </button>
                           </div>
                         </div>
@@ -1001,14 +1485,14 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
 
                   <div className="p-3.5 rounded-xl bg-blue-950/40 border border-blue-500/35 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="text-xs text-slate-300">
-                      Directed to <strong className="text-white">Elon Musk Official Management Table</strong> for Admin approval and settlement account verification.
+                      Directed to the <strong className="text-white">Elon Musk Official Management Table</strong> for executive approval and settlement account verification.
                     </div>
                     <button
                       type="submit"
                       className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap shrink-0 shadow-md"
                     >
                       <HeartHandshake className="w-4 h-4" />
-                      <span>Submit ${donationAmount.toLocaleString()} Donation for Admin Approval</span>
+                      <span>Submit ${donationAmount.toLocaleString()} Donation to Elon Musk Management</span>
                     </button>
                   </div>
                 </form>
@@ -1024,7 +1508,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                         Direct Relief &amp; Support Appeals — Approved Exclusively by Elon Musk Management
                       </div>
                       <p className="text-slate-300 leading-relaxed">
-                        Individuals, local NGOs, hospitals, and emergency coordinators in countries affected by war or terrorism can submit a support request below. All support requests are routed directly to the Admin Portal for review, approval by Elon Musk Management, and settlement account provisioning.
+                        Individuals, local NGOs, hospitals, and emergency coordinators in countries affected by war or terrorism can submit a support request below. All support requests are routed directly to Elon Musk Management for review, approval, and settlement account provisioning.
                       </p>
                     </div>
                   </div>
@@ -1151,7 +1635,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                       <div>
                         <span className="font-semibold text-white flex items-center gap-1.5">
                           <Landmark className="w-3.5 h-3.5 text-blue-300" />
-                          <span>Request Official Disbursement / Relief Accounts Provision from Admin</span>
+                          <span>Request Official Disbursement / Relief Accounts Provision from Elon Musk Management</span>
                         </span>
                         <span className="text-[11px] text-slate-400 block mt-0.5">
                           Routes an account provisioning ticket directly to the Elon Musk Official Management Table alongside your support approval request.
@@ -1185,14 +1669,14 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
 
                   <div className="p-3.5 rounded-xl bg-blue-950/40 border border-blue-500/35 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="text-xs text-slate-300">
-                      All support requests require approval by <strong className="text-white">Elon Musk Management</strong> &amp; Admin accounts provision.
+                      All support requests require approval by <strong className="text-white">Elon Musk Management</strong> &amp; official accounts provision.
                     </div>
                     <button
                       type="submit"
                       className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap shrink-0 shadow-md"
                     >
                       <Send className="w-4 h-4" />
-                      <span>Submit Support Request to Admin</span>
+                      <span>Submit Support Request to Elon Musk Management</span>
                     </button>
                   </div>
                 </form>

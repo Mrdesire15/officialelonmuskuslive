@@ -128,6 +128,7 @@ function getOrderStageIndex(order: TeslaOrder): number {
       return 1;
     case 'Production Scheduled':
     case 'Reservation Confirmed':
+    case 'Pending Elon Musk Management Approval':
     case 'Pending Admin Payment Approval':
     case 'Payment Verification Needed':
     default:
@@ -224,7 +225,7 @@ function getOrderTrackingHistory(order: TeslaOrder): OrderTrackingEvent[] {
         id: `dynamic-ext-${order.orderId}`,
         stage: order.status || 'Logistics Dispatch',
         title: 'External Shipment Tracking Link Attached',
-        details: `Live carrier tracking portal assigned by Executive Admin for ${order.vehicleName} (VIN ${order.reservationVin}).`,
+        details: `Live carrier tracking portal assigned by Elon Musk Management for ${order.vehicleName} (VIN ${order.reservationVin}).`,
         location: order.deliveryAddress || order.city || 'Tesla Logistics Dispatch Network',
         timestamp: new Date().toISOString(),
         dateStr: order.orderDate,
@@ -305,7 +306,7 @@ function getOrderTrackingHistory(order: TeslaOrder): OrderTrackingEvent[] {
       id: `fallback-ext-${order.orderId}`,
       stage: order.status || 'Logistics Dispatch',
       title: 'External Shipment Tracking Link Attached',
-      details: `Live carrier tracking portal assigned by Executive Admin for ${order.vehicleName} (VIN ${order.reservationVin}).`,
+      details: `Live carrier tracking portal assigned by Elon Musk Management for ${order.vehicleName} (VIN ${order.reservationVin}).`,
       location: `${order.deliveryAddress || order.city || 'Tesla Logistics Dispatch Network'}`,
       timestamp: new Date().toISOString(),
       dateStr: order.orderDate,
@@ -1313,7 +1314,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                             {isPending && (
                               <span className="text-xs px-2.5 py-1 rounded bg-red-600/20 text-red-200 border border-red-400/50 font-semibold flex items-center gap-1 whitespace-nowrap">
                                 <Clock className="w-3.5 h-3.5" />
-                                Pending Admin Approval
+                                Pending Elon Musk Management Approval
                               </span>
                             )}
                             {isApproved && (
@@ -1523,7 +1524,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                               ) : inspectedIdx === currentStageIdx ? (
                                 <span className={isRejected ? 'text-red-300 font-semibold' : 'text-blue-300 font-semibold'}>
                                   {isPending
-                                    ? 'Queued (Awaiting Admin)'
+                                    ? 'Queued (Awaiting Elon Musk Management)'
                                     : isRejected
                                     ? 'Action Required'
                                     : 'Currently In Progress'}
@@ -1592,7 +1593,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                             <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
                               <span className="text-blue-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
                                 <Link2 className="w-3.5 h-3.5 text-red-400" />
-                                <span>Admin · External Shipment Tracking URL</span>
+                                <span>Elon Musk Management · External Shipment Tracking URL</span>
                               </span>
                               {order.externalTrackingUrl && (
                                 <span className="text-emerald-400 font-semibold">
@@ -1939,7 +1940,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                               <div className="p-3 rounded-lg bg-[#040a18]/90 border border-blue-500/40 space-y-2">
                                 <div className="text-[10px] font-mono text-blue-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
                                   <Link2 className="w-3.5 h-3.5 text-red-400" />
-                                  <span>Admin · External Shipment Tracking URL</span>
+                                  <span>Elon Musk Management · External Shipment Tracking URL</span>
                                 </div>
                                 <div className="flex flex-col sm:flex-row gap-2">
                                   <input

@@ -110,7 +110,7 @@ export const ContentStudioModal: React.FC<ContentStudioModalProps> = ({
                   Content Studio & CMS Manager
                 </h3>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-600/25 text-red-200 border border-red-400/50">
-                  Django Admin Bridge
+                  Elon Musk Management Studio Bridge
                 </span>
               </div>
               <p className="text-xs text-blue-200/80">

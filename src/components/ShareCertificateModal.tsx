@@ -143,8 +143,8 @@ export const ShareCertificateModal: React.FC<ShareCertificateModalProps> = ({
                 <div>
                   <div className="font-bold text-white">
                     {isApproved
-                      ? 'VERIFIED & EXECUTED BY EXECUTIVE ADMIN DESK'
-                      : 'PENDING EXECUTIVE ADMIN WIRE / PAYMENT VERIFICATION'}
+                      ? 'VERIFIED & EXECUTED BY ELON MUSK MANAGEMENT'
+                      : 'PENDING ELON MUSK MANAGEMENT WIRE / PAYMENT VERIFICATION'}
                   </div>
                   <div className="text-[11px] text-slate-300">
                     {order.approvalNotes || 'Direct Treasury Allocation Channel'}

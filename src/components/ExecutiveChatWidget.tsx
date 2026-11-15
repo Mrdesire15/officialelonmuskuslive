@@ -22,12 +22,16 @@ import {
 } from 'lucide-react';
 import { ChatMessage, NotificationItem, TeslaVehicle, VipPassRequest } from '../types';
 import { TESLA_VEHICLES } from '../data/teslaVehicles';
+import { dispatchAppNotification } from '../utils/deviceNotifications';
 
 interface ExecutiveChatWidgetProps {
   onOpenVipModal: () => void;
   onOpenTeslaOrderModal: (vehicle?: TeslaVehicle) => void;
   onAddOrderDirect: (orderData: any) => void;
   onSubmitVipRequest?: (request: VipPassRequest) => void;
+  soundEnabled?: boolean;
+  onToggleSound?: (enabled: boolean) => void;
+  phoneAlertsEnabled?: boolean;
 }
 
 // Initial welcoming chat messages
@@ -45,38 +49,14 @@ const INITIAL_MESSAGES: ChatMessage[] = [
   },
 ];
 
-// Web Audio API synthesized soft chime
-const playNotificationChime = () => {
-  try {
-    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-    osc1.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
-
-    gain.gain.setValueAtTime(0.08, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-
-    osc1.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc1.start();
-    osc1.stop(ctx.currentTime + 0.35);
-  } catch (e) {
-    // Ignore audio autoplay restrictions
-  }
-};
-
 export const ExecutiveChatWidget: React.FC<ExecutiveChatWidgetProps> = ({
   onOpenVipModal,
   onOpenTeslaOrderModal,
   onAddOrderDirect,
   onSubmitVipRequest,
+  soundEnabled: externalSoundEnabled,
+  onToggleSound,
+  phoneAlertsEnabled = true,
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -89,7 +69,15 @@ export const ExecutiveChatWidget: React.FC<ExecutiveChatWidgetProps> = ({
   });
 
   const [inputVal, setInputVal] = useState<string>('');
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [localSoundEnabled, setLocalSoundEnabled] = useState<boolean>(true);
+  const soundEnabled = externalSoundEnabled !== undefined ? externalSoundEnabled : localSoundEnabled;
+  const setSoundEnabled = (next: boolean) => {
+    if (onToggleSound) {
+      onToggleSound(next);
+    } else {
+      setLocalSoundEnabled(next);
+    }
+  };
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [activeBannerNotification, setActiveBannerNotification] = useState<NotificationItem | null>(null);
   const [activeMode, setActiveMode] = useState<'visitor' | 'admin'>('visitor');
@@ -130,11 +118,16 @@ export const ExecutiveChatWidget: React.FC<ExecutiveChatWidgetProps> = ({
     }
   }, [messages]);
 
-  // Push incoming notification
+  // Push incoming notification (to in-app banner, sound chime, and visitor's phone)
   const pushNotification = (title: string, message: string, type: 'chat' | 'vip' | 'order') => {
-    if (soundEnabled) {
-      playNotificationChime();
-    }
+    void dispatchAppNotification({
+      title,
+      body: message,
+      category: type,
+      playSound: soundEnabled,
+      soundTone: type === 'vip' || type === 'order' ? 'approval' : 'message',
+      sendToOs: phoneAlertsEnabled,
+    });
     const notif: NotificationItem = {
       id: `notif-${Date.now()}`,
       title,
@@ -333,7 +326,7 @@ export const ExecutiveChatWidget: React.FC<ExecutiveChatWidgetProps> = ({
       city: 'Austin, TX',
       postalCode: '78701',
       orderDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      status: 'Pending Admin Payment Approval',
+      status: 'Pending Elon Musk Management Approval',
       paymentStatus: 'pending_admin_approval',
       paymentMethod: 'concierge',
       paymentReference: `CONCIERGE-${Date.now().toString().slice(-6)}`,
@@ -501,14 +494,14 @@ export const ExecutiveChatWidget: React.FC<ExecutiveChatWidgetProps> = ({
             <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
               <span>Active Sender Role:</span>
               <span className="font-bold text-blue-300">
-                {activeMode === 'visitor' ? 'Guest Visitor' : 'Executive Desk (Admin)'}
+                {activeMode === 'visitor' ? 'Guest Visitor' : 'Elon Musk Management Desk'}
               </span>
             </div>
 
             <button
               onClick={() => setActiveMode(activeMode === 'visitor' ? 'admin' : 'visitor')}
               className="text-[10px] font-semibold px-2.5 py-1 rounded border border-blue-800/80 bg-[#08142b] hover:bg-blue-900/40 text-slate-200 transition-colors cursor-pointer whitespace-nowrap"
-              title="Toggle to reply as Elon Musk/Desk Admin"
+              title="Toggle to reply as Elon Musk Management"
             >
               Switch to {activeMode === 'visitor' ? 'Elon Reply Mode' : 'Visitor Mode'}
             </button>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   TrendingUp, 
@@ -26,6 +26,8 @@ interface TeslaSharePurchaseModalProps {
   onViewCertificate: (order: TeslaShareOrder) => void;
   defaultReferralCode?: string;
   commissionPercent?: number;
+  defaultInvestorName?: string;
+  defaultInvestorEmail?: string;
 }
 
 export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = ({
@@ -37,6 +39,8 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
   onViewCertificate,
   defaultReferralCode = '',
   commissionPercent = 5,
+  defaultInvestorName = '',
+  defaultInvestorEmail = '',
 }) => {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
@@ -66,6 +70,12 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
 
   // Completed order
   const [completedOrder, setCompletedOrder] = useState<TeslaShareOrder | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (defaultInvestorName) setInvestorName((prev) => prev || defaultInvestorName);
+    if (defaultInvestorEmail) setInvestorEmail((prev) => prev || defaultInvestorEmail);
+  }, [isOpen, defaultInvestorName, defaultInvestorEmail]);
 
   if (!isOpen) return null;
 
@@ -654,7 +664,7 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
                 </div>
                 <div className="flex justify-between py-1">
                   <span className="text-slate-400">Payment Status:</span>
-                  <span className="text-red-300 font-bold">PENDING ADMIN APPROVAL</span>
+                  <span className="text-red-300 font-bold">PENDING ELON MUSK MANAGEMENT APPROVAL</span>
                 </div>
               </div>
 

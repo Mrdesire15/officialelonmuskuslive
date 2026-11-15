@@ -45,6 +45,8 @@ interface TeslaOrderModalProps {
     note?: string;
   }) => PaymentAccountRequest;
   onOpenInbox?: () => void;
+  defaultCustomerName?: string;
+  defaultCustomerEmail?: string;
 }
 
 export const TeslaOrderModal: React.FC<TeslaOrderModalProps> = ({
@@ -58,6 +60,8 @@ export const TeslaOrderModal: React.FC<TeslaOrderModalProps> = ({
   paymentAccountRequests = [],
   onRequestPaymentAccount,
   onOpenInbox,
+  defaultCustomerName = '',
+  defaultCustomerEmail = '',
 }) => {
   if (!isOpen || !vehicle) return null;
 
@@ -72,6 +76,8 @@ export const TeslaOrderModal: React.FC<TeslaOrderModalProps> = ({
       paymentAccountRequests={paymentAccountRequests}
       onRequestPaymentAccount={onRequestPaymentAccount}
       onOpenInbox={onOpenInbox}
+      defaultCustomerName={defaultCustomerName}
+      defaultCustomerEmail={defaultCustomerEmail}
     />
   );
 };
@@ -93,6 +99,8 @@ const TeslaOrderModalInner: React.FC<{
     note?: string;
   }) => PaymentAccountRequest;
   onOpenInbox?: () => void;
+  defaultCustomerName?: string;
+  defaultCustomerEmail?: string;
 }> = ({
   vehicle,
   onClose,
@@ -103,6 +111,8 @@ const TeslaOrderModalInner: React.FC<{
   paymentAccountRequests,
   onRequestPaymentAccount,
   onOpenInbox,
+  defaultCustomerName = '',
+  defaultCustomerEmail = '',
 }) => {
   const vehicleSpecs = getVehicleDetailedSpecs(vehicle);
 
@@ -122,8 +132,8 @@ const TeslaOrderModalInner: React.FC<{
 
   // Customer Details Form State
   const [step, setStep] = useState<'configure' | 'checkout' | 'confirmed'>('configure');
-  const [customerName, setCustomerName] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerName, setCustomerName] = useState(defaultCustomerName);
+  const [customerEmail, setCustomerEmail] = useState(defaultCustomerEmail);
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [city, setCity] = useState('');
@@ -253,7 +263,7 @@ const TeslaOrderModalInner: React.FC<{
       city: city || 'Austin, TX',
       postalCode: postalCode || '78701',
       orderDate: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      status: 'Pending Admin Payment Approval',
+      status: 'Pending Elon Musk Management Approval',
       estimatedDelivery: vehicle.deliveryEstimate,
       flightModeCertified: vehicle.isFlyingCar,
       referralCodeUsed: normalizedRef || undefined,
@@ -801,10 +811,10 @@ const TeslaOrderModalInner: React.FC<{
                           <ShieldCheck className="w-4 h-4 text-emerald-400" />
                           <span>
                             {paymentMethod === 'wire'
-                              ? 'Admin-Issued Wire Transfer / ACH Account'
+                              ? 'Elon Musk Management-Issued Wire Transfer / ACH Account'
                               : paymentMethod === 'gift_card'
-                              ? 'Admin-Issued Gift Card Settlement Details'
-                              : 'Admin-Issued Crypto Settlement Wallet'}
+                              ? 'Elon Musk Management-Issued Gift Card Settlement Details'
+                              : 'Elon Musk Management-Issued Crypto Settlement Wallet'}
                           </span>
                         </div>
                         <button
@@ -845,7 +855,7 @@ const TeslaOrderModalInner: React.FC<{
                           </span>
                         </div>
                         <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-950 border border-blue-500/40 text-blue-200">
-                          {pendingRequest.id} · Pending Admin
+                          {pendingRequest.id} · Pending Elon Musk Management
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-300 leading-relaxed">
@@ -876,10 +886,10 @@ const TeslaOrderModalInner: React.FC<{
                         <Lock className="w-4 h-4 text-red-400" />
                         <span>
                           {paymentMethod === 'wire'
-                            ? 'Wire Transfer / ACH Account — Admin Issued'
+                            ? 'Wire Transfer / ACH Account — Elon Musk Management Issued'
                             : paymentMethod === 'gift_card'
-                            ? 'Gift Card Settlement — Admin Issued'
-                            : 'Bitcoin / Doge / USDC Wallet — Admin Issued'}
+                            ? 'Gift Card Settlement — Elon Musk Management Issued'
+                            : 'Bitcoin / Doge / USDC Wallet — Elon Musk Management Issued'}
                         </span>
                       </div>
                       <span className="text-[10px] font-mono text-red-300 uppercase">
@@ -925,10 +935,10 @@ const TeslaOrderModalInner: React.FC<{
                         <Send className="w-3.5 h-3.5" />
                         <span>
                           {paymentMethod === 'wire'
-                            ? 'Request Wire Account from Admin'
+                            ? 'Request Wire Account from Elon Musk Management'
                             : paymentMethod === 'gift_card'
-                            ? 'Request Gift Card Account from Admin'
-                            : 'Request Crypto Wallet from Admin'}
+                            ? 'Request Gift Card Account from Elon Musk Management'
+                            : 'Request Crypto Wallet from Elon Musk Management'}
                         </span>
                       </button>
                     </div>

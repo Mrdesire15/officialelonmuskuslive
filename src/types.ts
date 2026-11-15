@@ -168,7 +168,7 @@ export interface TeslaOrder {
   city: string;
   postalCode: string;
   orderDate: string;
-  status: 'Reservation Confirmed' | 'Pending Admin Payment Approval' | 'Payment Approved & VIN Allocated' | 'Payment Verification Needed' | 'Production Scheduled' | 'Factory Assembly' | 'Quality Inspection' | 'In Transit' | 'Ready for Delivery' | 'Delivered' | string;
+  status: 'Reservation Confirmed' | 'Pending Elon Musk Management Approval' | 'Pending Admin Payment Approval' | 'Payment Approved & VIN Allocated' | 'Payment Verification Needed' | 'Production Scheduled' | 'Factory Assembly' | 'Quality Inspection' | 'In Transit' | 'Ready for Delivery' | 'Delivered' | string;
   estimatedDelivery: string;
   flightModeCertified?: boolean;
   paymentStatus: 'pending_admin_approval' | 'approved' | 'rejected';
@@ -362,12 +362,28 @@ export type CrisisCategory = 'War & Armed Conflict' | 'Terrorism & Insurgency' |
 
 export interface CrisisCountry {
   id: string;
+  isoNumeric?: string;
+  coordinates?: [number, number]; // [longitude, latitude]
   name: string;
+  continent: string;
   region: 'Europe & Eurasia' | 'Middle East' | 'Africa' | 'Asia-Pacific' | 'Americas' | 'Global';
   crisisType: CrisisCategory;
+  reliefStatus?: string;
+  activeProjects?: string[];
   urgentNeeds: string;
   activeNgoSectionId: string;
   displacedEstimate: string;
+  image: string;
+}
+
+export interface ContinentReliefHub {
+  id: string;
+  continentName: string;
+  region: CrisisCountry['region'];
+  centerCoords: [number, number]; // [longitude, latitude]
+  image: string;
+  reliefSummary: string;
+  flagshipOperations: string;
 }
 
 export interface CharityDonationRequest {
