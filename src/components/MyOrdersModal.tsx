@@ -142,6 +142,7 @@ type VehicleModelCategory =
   | 'Model X'
   | 'Model 3'
   | 'Model Y'
+  | 'Official Apparel'
   | 'Custom Fleet';
 
 const MODEL_CATEGORIES: {
@@ -154,10 +155,12 @@ const MODEL_CATEGORIES: {
   { key: 'Model X', color: '#10b981', dotClass: 'bg-emerald-500' },
   { key: 'Model 3', color: '#a855f7', dotClass: 'bg-purple-500' },
   { key: 'Model Y', color: '#f59e0b', dotClass: 'bg-amber-500' },
+  { key: 'Official Apparel', color: '#ec4899', dotClass: 'bg-pink-500' },
   { key: 'Custom Fleet', color: '#06b6d4', dotClass: 'bg-cyan-500' },
 ];
 
 function getOrderModelCategory(order: TeslaOrder): VehicleModelCategory {
+  if (order.itemCategory === 'merch') return 'Official Apparel';
   const name = order.vehicleName.toLowerCase();
   const id = order.vehicleId.toLowerCase();
   if (name.includes('model s') || id.includes('model-s')) return 'Model S';
@@ -328,6 +331,7 @@ interface OrderChartRow {
   'Model X': number;
   'Model 3': number;
   'Model Y': number;
+  'Official Apparel': number;
   'Custom Fleet': number;
   countByModel: Record<VehicleModelCategory, number>;
   spendByModel: Record<VehicleModelCategory, number>;
@@ -417,6 +421,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
       'Model X': 0,
       'Model 3': 0,
       'Model Y': 0,
+      'Official Apparel': 0,
       'Custom Fleet': 0,
     });
 
@@ -526,6 +531,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
           'Model X': rowSource['Model X'],
           'Model 3': rowSource['Model 3'],
           'Model Y': rowSource['Model Y'],
+          'Official Apparel': rowSource['Official Apparel'],
           'Custom Fleet': rowSource['Custom Fleet'],
           countByModel: b.counts,
           spendByModel: b.spend,
@@ -1306,7 +1312,9 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                               {order.vehicleName}
                             </h4>
                             <div className="text-xs text-slate-300">
-                              Color: {order.selectedColor.name} · Wheels: {order.selectedWheels.name} · Interior: {order.selectedInterior.name}
+                              {order.itemCategory === 'merch'
+                                ? `${order.merchQualityTier || order.selectedInterior.name} · Size: ${order.merchSize || 'Standard'} · Qty: ${order.merchQuantity || 1}`
+                                : `Color: ${order.selectedColor.name} · Wheels: ${order.selectedWheels.name} · Interior: ${order.selectedInterior.name}`}
                             </div>
                           </div>
 
@@ -1570,15 +1578,21 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                         {/* Core Financial & Logistics Grid */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                           <div>
-                            <div className="text-slate-400 text-[10px] uppercase">Reservation VIN</div>
+                            <div className="text-slate-400 text-[10px] uppercase">
+                              {order.itemCategory === 'merch' ? 'SKU Reference' : 'Reservation VIN'}
+                            </div>
                             <div className="font-mono tabular-nums text-blue-300 font-bold">{order.reservationVin}</div>
                           </div>
                           <div>
-                            <div className="text-slate-400 text-[10px] uppercase">Paid Today (Deposit)</div>
+                            <div className="text-slate-400 text-[10px] uppercase">
+                              {order.itemCategory === 'merch' ? 'Paid Today' : 'Paid Today (Deposit)'}
+                            </div>
                             <div className="font-mono tabular-nums text-white font-bold">${order.amountPaidToday.toLocaleString()}</div>
                           </div>
                           <div>
-                            <div className="text-slate-400 text-[10px] uppercase">Real Vehicle Price</div>
+                            <div className="text-slate-400 text-[10px] uppercase">
+                              {order.itemCategory === 'merch' ? 'Order Total' : 'Real Vehicle Price'}
+                            </div>
                             <div className="font-mono tabular-nums text-white font-bold">${order.totalPrice.toLocaleString()}</div>
                           </div>
                           <div>

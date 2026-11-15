@@ -134,6 +134,32 @@ export interface TeslaVehicle {
   detailedSpecs?: VehicleDetailedSpecs;
 }
 
+export interface MerchQualityTier {
+  id: string;
+  gradeCode: string;
+  name: string;
+  price: number;
+  materialSpec: string;
+  craftsmanshipNote: string;
+  deliveryEstimate: string;
+}
+
+export interface MerchProduct {
+  id: string;
+  skuPrefix: string;
+  name: string;
+  categoryLabel: string;
+  editionTag: string;
+  description: string;
+  image: string;
+  minPrice: number;
+  maxPrice: number;
+  sizes: string[];
+  defaultSize: string;
+  qualityTiers: MerchQualityTier[];
+  highlights: string[];
+}
+
 export interface OrderTrackingEvent {
   id: string;
   stage: string;
@@ -152,6 +178,11 @@ export interface TeslaOrder {
   vehicleId: string;
   vehicleName: string;
   isFlyingCar: boolean;
+  itemCategory?: 'vehicle' | 'merch';
+  merchSize?: string;
+  merchQualityTier?: string;
+  merchMaterialSpec?: string;
+  merchQuantity?: number;
   paymentType: 'deposit' | 'full';
   depositAmount: number;
   totalPrice: number;
@@ -312,7 +343,7 @@ export interface VipPassRequest {
 export interface ReferralConversion {
   id: string;
   orderId: string;
-  orderType: 'vehicle' | 'shares' | 'vip';
+  orderType: 'vehicle' | 'shares' | 'vip' | 'merch';
   itemTitle: string;
   buyerName: string;
   referrerCode: string;
@@ -333,7 +364,7 @@ export interface PaymentAccountRequest {
   visitorName: string;
   visitorEmail: string;
   note?: string;
-  requestCategory?: 'vehicle' | 'charity_donation' | 'charity_support';
+  requestCategory?: 'vehicle' | 'merch' | 'charity_donation' | 'charity_support';
   status: 'pending_admin' | 'issued';
   issuedAccountDetails?: string;
   requestedAt: string;

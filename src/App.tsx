@@ -29,6 +29,7 @@ import {
   AdminPaymentAccounts,
   CharityDonationRequest,
   CharitySupportRequest,
+  MerchProduct,
   PageId
 } from './types';
 import { PAGES_CONFIG } from './data/pagesData';
@@ -45,6 +46,7 @@ import { CaptionEditorModal } from './components/CaptionEditorModal';
 import { AddPhotoModal } from './components/AddPhotoModal';
 import { ContentStudioModal } from './components/ContentStudioModal';
 import { TeslaOrderModal } from './components/TeslaOrderModal';
+import { MerchOrderModal } from './components/MerchOrderModal';
 import { MyOrdersModal } from './components/MyOrdersModal';
 import { RsvpModal } from './components/RsvpModal';
 import { ExecutiveChatWidget } from './components/ExecutiveChatWidget';
@@ -360,6 +362,11 @@ export default function App() {
   const [isContentStudioOpen, setIsContentStudioOpen] = useState<boolean>(false);
   const [isRsvpOpen, setIsRsvpOpen] = useState<boolean>(false);
   const [orderingVehicle, setOrderingVehicle] = useState<TeslaVehicle | null>(null);
+  const [orderingMerch, setOrderingMerch] = useState<{
+    product: MerchProduct;
+    initialTierId?: string;
+    initialSize?: string;
+  } | null>(null);
   const [isMyOrdersOpen, setIsMyOrdersOpen] = useState<boolean>(false);
   const [isInboxOpen, setIsInboxOpen] = useState<boolean>(false);
   const [isAdminPortalOpen, setIsAdminPortalOpen] = useState<boolean>(false);
@@ -894,7 +901,7 @@ export default function App() {
 
   const logReferralConversion = (params: {
     orderId: string;
-    orderType: 'vehicle' | 'shares' | 'vip';
+    orderType: 'vehicle' | 'shares' | 'vip' | 'merch';
     itemTitle: string;
     buyerName: string;
     referrerCode: string;
@@ -930,10 +937,12 @@ export default function App() {
   const handleOrderCompleted = (newOrder: TeslaOrder) => {
     setOrders((prev) => [newOrder, ...prev]);
 
+    const isMerch = newOrder.itemCategory === 'merch';
+
     if (newOrder.referralCodeUsed) {
       logReferralConversion({
         orderId: newOrder.orderId,
-        orderType: 'vehicle',
+        orderType: isMerch ? 'merch' : 'vehicle',
         itemTitle: newOrder.vehicleName,
         buyerName: newOrder.customerName,
         referrerCode: newOrder.referralCodeUsed,
@@ -949,7 +958,9 @@ export default function App() {
       sender: 'concierge',
       senderName: 'Elon Musk Official Management Table',
       subject: `Order #${newOrder.orderId}: Sent to Official Management Table for Verification`,
-      body: `Your reservation for ${newOrder.vehicleName} with deposit of $${newOrder.amountPaidToday.toLocaleString()} (${(newOrder.paymentMethod || 'wire').toUpperCase()}) has been received.\n\nPayment Status: PENDING OFFICIAL MANAGEMENT TABLE VERIFICATION\nPayment Reference: ${newOrder.paymentReference || 'N/A'}\nReservation VIN: ${newOrder.reservationVin}${newOrder.referralCodeUsed ? `\nReferral Code Applied: ${newOrder.referralCodeUsed} (${newOrder.referralCommissionPercent ?? commissionPercent}% · $${(newOrder.referralCommissionAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} referrer reward queued)` : ''}\n\nYour request has been sent to the Elon Musk Official Management Table for account provisioning and settlement verification. You will receive an instant in-app update here once approved. You can reply directly in this thread for any questions.`,
+      body: isMerch
+        ? `Your official merchandise order for ${newOrder.vehicleName} (Size: ${newOrder.merchSize || 'Standard'} · Qty: ${newOrder.merchQuantity || 1}) totaling $${newOrder.amountPaidToday.toLocaleString()} (${(newOrder.paymentMethod || 'wire').toUpperCase()}) has been received.\n\nQuality Tier: ${newOrder.merchQualityTier || 'Selected Grade'}\nPayment Status: PENDING OFFICIAL MANAGEMENT TABLE VERIFICATION\nPayment Reference: ${newOrder.paymentReference || 'N/A'}\nSKU Reference: ${newOrder.reservationVin}${newOrder.referralCodeUsed ? `\nReferral Code Applied: ${newOrder.referralCodeUsed} (${newOrder.referralCommissionPercent ?? commissionPercent}% · $${(newOrder.referralCommissionAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} referrer reward queued)` : ''}\n\nYour request has been sent to the Elon Musk Official Management Table for account provisioning and settlement verification. You will receive an instant in-app update here once approved.`
+        : `Your reservation for ${newOrder.vehicleName} with deposit of $${newOrder.amountPaidToday.toLocaleString()} (${(newOrder.paymentMethod || 'wire').toUpperCase()}) has been received.\n\nPayment Status: PENDING OFFICIAL MANAGEMENT TABLE VERIFICATION\nPayment Reference: ${newOrder.paymentReference || 'N/A'}\nReservation VIN: ${newOrder.reservationVin}${newOrder.referralCodeUsed ? `\nReferral Code Applied: ${newOrder.referralCodeUsed} (${newOrder.referralCommissionPercent ?? commissionPercent}% · $${(newOrder.referralCommissionAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} referrer reward queued)` : ''}\n\nYour request has been sent to the Elon Musk Official Management Table for account provisioning and settlement verification. You will receive an instant in-app update here once approved. You can reply directly in this thread for any questions.`,
       category: 'payment_approval',
       read: false,
       timestamp: new Date().toISOString(),
@@ -970,6 +981,7 @@ export default function App() {
     const targetOrder = orders.find((o) => o.orderId === orderId);
     if (!targetOrder) return;
 
+    const isMerch = targetOrder.itemCategory === 'merch';
     const now = new Date();
     const dateStr = now.toLocaleString('en-US', {
       month: 'short',
@@ -985,16 +997,20 @@ export default function App() {
           ? {
               ...o,
               paymentStatus: 'approved',
-              status: 'Payment Approved & VIN Allocated',
+              status: isMerch ? 'Payment Approved & Preparing Dispatch' : 'Payment Approved & VIN Allocated',
               approvedAt: now.toISOString(),
               approvalNotes: notes || 'Verified and approved by Elon Musk Official Management Table.',
               trackingHistory: [
                 ...(o.trackingHistory || []),
                 {
                   id: `trk-approve-${now.getTime()}`,
-                  stage: 'Assembly',
-                  title: 'Payment Approved & VIN Allocated',
-                  details: notes || `Settlement verified ($${o.amountPaidToday.toLocaleString()}) and VIN ${o.reservationVin} scheduled into Gigafactory Assembly.`,
+                  stage: isMerch ? 'Fulfillment' : 'Assembly',
+                  title: isMerch ? 'Payment Approved & Confirmed' : 'Payment Approved & VIN Allocated',
+                  details:
+                    notes ||
+                    (isMerch
+                      ? `Settlement verified ($${o.amountPaidToday.toLocaleString()}) for SKU ${o.reservationVin}. Prepared for quality inspection & courier dispatch.`
+                      : `Settlement verified ($${o.amountPaidToday.toLocaleString()}) and VIN ${o.reservationVin} scheduled into Gigafactory Assembly.`),
                   location: 'Elon Musk Official Management Table & Treasury',
                   timestamp: now.toISOString(),
                   dateStr,
@@ -1019,8 +1035,12 @@ export default function App() {
       id: `msg-approval-${Date.now()}`,
       sender: 'concierge',
       senderName: 'Elon Musk Official Management Table',
-      subject: `Payment Approved: ${targetOrder.vehicleName} (VIN ${targetOrder.reservationVin})`,
-      body: `Your payment of $${targetOrder.amountPaidToday.toLocaleString()} for the ${targetOrder.vehicleName} has been verified and APPROVED by the Elon Musk Official Management Table.\n\nChassis VIN ${targetOrder.reservationVin} is now permanently secured in our Gigafactory priority production schedule.\n\nDelivery Destination: ${targetOrder.deliveryAddress || targetOrder.city || 'Tesla Delivery Center'}\nEstimated Delivery: ${targetOrder.estimatedDelivery}${notes ? `\n\nManagement Allocation Notes: ${notes}` : ''}\n\nYou can reply directly in this thread for any questions.`,
+      subject: isMerch
+        ? `Payment Approved: ${targetOrder.vehicleName} (SKU ${targetOrder.reservationVin})`
+        : `Payment Approved: ${targetOrder.vehicleName} (VIN ${targetOrder.reservationVin})`,
+      body: isMerch
+        ? `Your payment of $${targetOrder.amountPaidToday.toLocaleString()} for ${targetOrder.vehicleName} (Size: ${targetOrder.merchSize || 'Standard'} · Qty: ${targetOrder.merchQuantity || 1}) has been verified and APPROVED by the Elon Musk Official Management Table.\n\nSKU Reference: ${targetOrder.reservationVin}\nDelivery Destination: ${targetOrder.deliveryAddress || targetOrder.city || 'Courier Shipping'}\nEstimated Delivery: ${targetOrder.estimatedDelivery}${notes ? `\n\nManagement Notes: ${notes}` : ''}\n\nYou can reply directly in this thread for any questions.`
+        : `Your payment of $${targetOrder.amountPaidToday.toLocaleString()} for the ${targetOrder.vehicleName} has been verified and APPROVED by the Elon Musk Official Management Table.\n\nChassis VIN ${targetOrder.reservationVin} is now permanently secured in our Gigafactory priority production schedule.\n\nDelivery Destination: ${targetOrder.deliveryAddress || targetOrder.city || 'Tesla Delivery Center'}\nEstimated Delivery: ${targetOrder.estimatedDelivery}${notes ? `\n\nManagement Allocation Notes: ${notes}` : ''}\n\nYou can reply directly in this thread for any questions.`,
       category: 'payment_approval',
       read: false,
       timestamp: now.toISOString(),
@@ -1537,7 +1557,7 @@ export default function App() {
     visitorName: string;
     visitorEmail: string;
     note?: string;
-    requestCategory?: 'vehicle' | 'charity_donation' | 'charity_support';
+    requestCategory?: 'vehicle' | 'merch' | 'charity_donation' | 'charity_support';
   }): PaymentAccountRequest => {
     const now = new Date();
     const prefix = payload.paymentMethod === 'gift_card' ? 'GIFT' : payload.paymentMethod.toUpperCase();
@@ -1569,7 +1589,10 @@ export default function App() {
       senderName: 'Elon Musk Official Management Table',
       subject: `Payment Account Requested (${req.id}): ${methodLabel}`,
       body: `Your request for ${methodLabel} details has been sent to the Elon Musk Official Management Table for account provisioning.\n\nAllocation / Purpose: ${payload.vehicleName}\nAmount Due: $${payload.amountDue.toLocaleString()} USD\nVisitor: ${payload.visitorName} (${payload.visitorEmail})${payload.note ? `\nNote: ${payload.note}` : ''}\n\nOnce the Management Table provisions your private settlement account, it will arrive here in your In-App Inbox and unlock inside your portal.`,
-      category: payload.requestCategory && payload.requestCategory !== 'vehicle' ? 'charity_ngo' : 'payment_approval',
+      category:
+        payload.requestCategory === 'charity_donation' || payload.requestCategory === 'charity_support'
+          ? 'charity_ngo'
+          : 'payment_approval',
       read: false,
       timestamp: now.toISOString(),
       timeStr: 'Just now',
@@ -2099,6 +2122,9 @@ export default function App() {
               <TeslaShowroomSection
                 vehicles={allVehicles}
                 onSelectVehicleToOrder={(vehicle) => setOrderingVehicle(vehicle)}
+                onSelectMerchToOrder={(product, initialTierId, initialSize) =>
+                  setOrderingMerch({ product, initialTierId, initialSize })
+                }
                 onOpenMyOrders={() => setIsMyOrdersOpen(true)}
                 ordersCount={orders.length}
                 onSelectPage={handleSelectPage}
@@ -2188,6 +2214,9 @@ export default function App() {
             <TeslaShowroomSection
               vehicles={allVehicles}
               onSelectVehicleToOrder={(vehicle) => setOrderingVehicle(vehicle)}
+              onSelectMerchToOrder={(product, initialTierId, initialSize) =>
+                setOrderingMerch({ product, initialTierId, initialSize })
+              }
               onOpenMyOrders={() => setIsMyOrdersOpen(true)}
               ordersCount={orders.length}
               onSelectPage={handleSelectPage}
@@ -2279,6 +2308,22 @@ export default function App() {
         isOpen={orderingVehicle !== null}
         vehicle={orderingVehicle}
         onClose={() => setOrderingVehicle(null)}
+        onOrderCompleted={handleOrderCompleted}
+        defaultReferralCode={appliedReferralCode}
+        commissionPercent={commissionPercent}
+        adminPaymentAccounts={adminPaymentAccounts}
+        paymentAccountRequests={paymentAccountRequests}
+        onRequestPaymentAccount={handleRequestPaymentAccount}
+        onOpenInbox={() => setIsInboxOpen(true)}
+      />
+
+      {/* Official Merchandise Ordering Modal (Black Unisex T-Shirt & 3D Trucker Hat) */}
+      <MerchOrderModal
+        isOpen={orderingMerch !== null}
+        product={orderingMerch?.product || null}
+        initialTierId={orderingMerch?.initialTierId}
+        initialSize={orderingMerch?.initialSize}
+        onClose={() => setOrderingMerch(null)}
         onOrderCompleted={handleOrderCompleted}
         defaultReferralCode={appliedReferralCode}
         commissionPercent={commissionPercent}

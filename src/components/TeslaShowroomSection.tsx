@@ -16,13 +16,17 @@ import {
   FileText,
   ArrowLeftRight,
   Trophy,
-  Flame
+  Flame,
+  ShoppingBag,
+  Package
 } from 'lucide-react';
-import { TeslaVehicle, VehicleDetailedSpecs, PageId } from '../types';
+import { TeslaVehicle, VehicleDetailedSpecs, PageId, MerchProduct } from '../types';
 import { TESLA_VEHICLES, getVehicleDetailedSpecs } from '../data/teslaVehicles';
+import { MERCH_PRODUCTS } from '../data/merchProducts';
 
 interface TeslaShowroomSectionProps {
   onSelectVehicleToOrder: (vehicle: TeslaVehicle) => void;
+  onSelectMerchToOrder?: (product: MerchProduct, tierId: string, size: string) => void;
   onOpenMyOrders: () => void;
   ordersCount: number;
   onSelectPage?: (page: PageId) => void;
@@ -168,6 +172,7 @@ const getEffectiveSpecMetrics = (
 
 export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
   onSelectVehicleToOrder,
+  onSelectMerchToOrder,
   onSelectPage,
   vehicles = TESLA_VEHICLES,
 }) => {
@@ -180,6 +185,13 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
   const [inspectedVehicle, setInspectedVehicle] = useState<TeslaVehicle | null>(null);
   const [dossierTab, setDossierTab] = useState<DossierTab>('performance');
   const [performanceModeByVehicle, setPerformanceModeByVehicle] = useState<Record<string, boolean>>({});
+  const [selectedTierByMerchId, setSelectedTierByMerchId] = useState<Record<string, string>>(() =>
+    Object.fromEntries(MERCH_PRODUCTS.map((p) => [p.id, p.qualityTiers[0].id]))
+  );
+  const [selectedSizeByMerchId, setSelectedSizeByMerchId] = useState<Record<string, string>>(() =>
+    Object.fromEntries(MERCH_PRODUCTS.map((p) => [p.id, p.defaultSize]))
+  );
+  const [brokenMerchImages, setBrokenMerchImages] = useState<Record<string, boolean>>({});
 
   const toggleVehiclePerformanceMode = (vehicleId: string) => {
     setPerformanceModeByVehicle((prev) => ({
@@ -308,6 +320,204 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
               <Table className="w-3.5 h-3.5 text-red-400" />
               <span>{showMatrix ? 'Hide Fleet Spec Matrix' : 'Show Fleet Spec Matrix'}</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                document
+                  .getElementById('official-merch-collection')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }
+              className="px-3.5 py-2 rounded-lg border border-blue-500/45 bg-[#08142b] hover:bg-blue-600/25 text-blue-100 text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <ShoppingBag className="w-3.5 h-3.5 text-blue-300" />
+              <span>Apparel &amp; Hats ($50–$500)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Official Apparel & Headwear Showcase ($50 - $500 Quality Graded) */}
+        <div id="official-merch-collection" className="mb-14 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pb-3 border-b border-blue-900/60">
+            <div>
+              <span className="text-xs font-mono uppercase tracking-wider text-blue-300 font-semibold">
+                Official Apparel &amp; Headwear · Quality-Graded Pricing
+              </span>
+              <h3 className="font-display text-2xl sm:text-3xl font-bold text-white mt-1">
+                Signature Black Tee &amp; 3D Trucker Hat
+              </h3>
+            </div>
+            <span className="text-xs font-mono text-slate-300 tabular-nums">
+              $50 – $500 USD per item depending on fabric &amp; build grade
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {MERCH_PRODUCTS.map((product) => {
+              const activeTierId = selectedTierByMerchId[product.id] || product.qualityTiers[0].id;
+              const activeTier =
+                product.qualityTiers.find((t) => t.id === activeTierId) || product.qualityTiers[0];
+              const activeSize = selectedSizeByMerchId[product.id] || product.defaultSize;
+              const isBroken = !!brokenMerchImages[product.id];
+
+              return (
+                <div
+                  key={product.id}
+                  className="rounded-2xl bg-[#08142b]/95 border border-blue-900/60 hover:border-blue-400/60 transition-all overflow-hidden flex flex-col justify-between shadow-lg"
+                >
+                  {/* Studio Product Image */}
+                  <div className="relative aspect-[4/3] bg-[#040a18] overflow-hidden border-b border-blue-900/60">
+                    {isBroken ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 p-6 text-center">
+                        <Package className="w-10 h-10 text-blue-400 mb-2" />
+                        <span className="text-xs font-mono uppercase">{product.name}</span>
+                      </div>
+                    ) : (
+                      <img
+                        src={product.image}
+                        alt={`${product.name} studio photograph`}
+                        referrerPolicy="no-referrer"
+                        onError={() =>
+                          setBrokenMerchImages((prev) => ({ ...prev, [product.id]: true }))
+                        }
+                        className="w-full h-full object-cover object-center transition-transform duration-500 hover:scale-[1.03]"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#040a18]/80 via-transparent to-transparent pointer-events-none" />
+                    <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-xs font-mono">
+                      <span className="text-slate-200">{product.editionTag}</span>
+                      <span className="text-blue-200 tabular-nums">
+                        ${product.minPrice} – ${product.maxPrice}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Contiguous Details & Interactive Quality / Size Selector */}
+                  <div className="p-5 sm:p-6 flex-1 flex flex-col justify-between space-y-5">
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1">
+                          <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400">
+                            {product.categoryLabel}
+                          </div>
+                          <h4 className="font-display text-xl font-bold text-white">
+                            {product.name}
+                          </h4>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-[10px] font-mono uppercase text-slate-400">
+                            Selected Grade
+                          </div>
+                          <div className="text-2xl font-display font-bold text-white font-mono tabular-nums">
+                            ${activeTier.price}
+                          </div>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-300 font-light leading-relaxed">
+                        {product.description}
+                      </p>
+
+                      {/* Quality Grade Selector ($50 - $500) */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-[11px] font-mono">
+                          <span className="text-blue-300 font-semibold uppercase tracking-wider">
+                            Quality Tier ($50 – $500)
+                          </span>
+                          <span className="text-slate-300">{activeTier.gradeCode} · {activeTier.name}</span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {product.qualityTiers.map((tier) => {
+                            const selected = tier.id === activeTier.id;
+                            return (
+                              <button
+                                key={tier.id}
+                                type="button"
+                                onClick={() =>
+                                  setSelectedTierByMerchId((prev) => ({
+                                    ...prev,
+                                    [product.id]: tier.id,
+                                  }))
+                                }
+                                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                                  selected
+                                    ? 'bg-gradient-to-r from-blue-600/35 to-red-600/30 border-blue-400 text-white shadow-sm'
+                                    : 'bg-[#040a18] border-blue-900/60 text-slate-300 hover:border-blue-500/60 hover:text-white'
+                                }`}
+                              >
+                                <div className="text-sm font-mono font-bold tabular-nums text-white">
+                                  ${tier.price}
+                                </div>
+                                <div className="text-[10px] font-mono text-blue-200 truncate">
+                                  {tier.name.split(' ')[0]}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Active Material Spec Readout */}
+                        <div className="p-3 rounded-xl bg-[#040a18]/90 border border-blue-900/60 space-y-1 text-xs">
+                          <div className="font-mono font-semibold text-blue-200 text-[11px]">
+                            {activeTier.materialSpec}
+                          </div>
+                          <div className="text-[11px] text-slate-300 leading-snug">
+                            {activeTier.craftsmanshipNote}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Size / Fit Selector */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-[11px] font-mono">
+                          <span className="text-slate-300 uppercase tracking-wider">Size / Fit</span>
+                          <span className="text-blue-300">{activeSize}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {product.sizes.map((size) => {
+                            const isSizeSelected = activeSize === size;
+                            return (
+                              <button
+                                key={size}
+                                type="button"
+                                onClick={() =>
+                                  setSelectedSizeByMerchId((prev) => ({
+                                    ...prev,
+                                    [product.id]: size,
+                                  }))
+                                }
+                                className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-mono font-semibold transition-colors cursor-pointer ${
+                                  isSizeSelected
+                                    ? 'bg-blue-600 border-blue-400 text-white'
+                                    : 'bg-[#040a18] border-blue-900/60 text-slate-300 hover:text-white hover:border-blue-500/50'
+                                }`}
+                              >
+                                {size}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Purchase Action */}
+                    <div className="pt-4 border-t border-blue-900/60 flex items-center justify-between gap-3">
+                      <div className="text-[11px] font-mono text-slate-400">
+                        {activeTier.deliveryEstimate}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onSelectMerchToOrder?.(product, activeTier.id, activeSize)}
+                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 active:scale-95 text-white font-bold text-xs font-mono transition-all shadow-md border border-white/15 flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 tabular-nums"
+                      >
+                        <ShoppingBag className="w-3.5 h-3.5" />
+                        <span>Order Now · ${activeTier.price}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 

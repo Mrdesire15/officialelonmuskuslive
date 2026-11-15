@@ -781,10 +781,20 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                                     Flying Roadster / VTOL
                                   </span>
                                 )}
+                                {order.itemCategory === 'merch' && (
+                                  <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-blue-600/25 text-blue-200 border border-blue-500/40">
+                                    Official Merchandise
+                                  </span>
+                                )}
                               </div>
                               <h4 className="font-display font-bold text-base text-white mt-0.5">
                                 {order.vehicleName}
                               </h4>
+                              {order.itemCategory === 'merch' && (
+                                <p className="text-[11px] font-mono text-slate-300 mt-0.5">
+                                  {order.merchQualityTier} · Size: {order.merchSize} · Qty: {order.merchQuantity || 1}
+                                </p>
+                              )}
                             </div>
 
                             {/* Status Badge */}
@@ -798,7 +808,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                               {isApproved && (
                                 <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500 flex items-center gap-1.5">
                                   <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Payment Approved & VIN Allocated
+                                  {order.itemCategory === 'merch' ? 'Payment Approved & Confirmed' : 'Payment Approved & VIN Allocated'}
                                 </span>
                               )}
                               {isRejected && (
@@ -818,7 +828,9 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                               <span className="text-slate-400 text-[11px] block">{order.customerEmail}</span>
                             </div>
                             <div>
-                              <span className="text-slate-400 text-[10px] uppercase block">Amount Paid (Deposit)</span>
+                              <span className="text-slate-400 text-[10px] uppercase block">
+                                {order.itemCategory === 'merch' ? 'Amount Paid' : 'Amount Paid (Deposit)'}
+                              </span>
                               <span className="text-white tabular-nums font-bold text-sm block">
                                 ${order.amountPaidToday.toLocaleString()}
                               </span>
@@ -832,7 +844,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                                 {order.paymentMethod || 'Credit / Escrow'}
                               </span>
                               <span className="text-slate-400 text-[11px] block">
-                                VIN: {order.reservationVin}
+                                {order.itemCategory === 'merch' ? 'SKU' : 'VIN'}: {order.reservationVin}
                               </span>
                             </div>
                             <div>
