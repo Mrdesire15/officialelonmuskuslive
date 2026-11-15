@@ -37,6 +37,7 @@ interface VisitorAuthModalProps {
   onClose: () => void;
   currentUser: User | null;
   authReady: boolean;
+  requiredGate?: boolean;
   onAuthSuccess?: (user: User, action: 'login' | 'signup') => void;
 }
 
@@ -45,6 +46,7 @@ export const VisitorAuthModal: React.FC<VisitorAuthModalProps> = ({
   onClose,
   currentUser,
   authReady,
+  requiredGate = false,
   onAuthSuccess,
 }) => {
   const [mode, setMode] = useState<'signup' | 'login' | 'reset'>('signup');
@@ -267,14 +269,35 @@ export const VisitorAuthModal: React.FC<VisitorAuthModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
+      className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-[#030816]/90 backdrop-blur-lg animate-fadeIn overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="visitor-auth-title"
     >
-      <div className="relative w-full max-w-md rounded-2xl bg-[#050d21] border border-blue-800/70 shadow-2xl overflow-hidden text-slate-100">
+      <div className="relative w-full max-w-md rounded-2xl bg-[#050d21] border border-blue-800/70 shadow-2xl overflow-hidden text-slate-100 my-auto">
         {/* Top Accent Strip */}
         <div className="h-[2px] w-full us-flag-strip" />
+
+        {requiredGate && !currentUser && (
+          <div className="px-6 py-3 bg-[#040a18] border-b border-blue-900/50 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 via-blue-700 to-red-600 border border-white/20 flex items-center justify-center text-white font-display font-black text-sm shrink-0">
+                X
+              </div>
+              <div className="min-w-0">
+                <div className="font-display font-black text-xs tracking-wider text-white truncate">
+                  ELON MUSK
+                </div>
+                <div className="text-[10px] font-mono tracking-wider text-blue-300/85 truncate">
+                  Executive Portal Access
+                </div>
+              </div>
+            </div>
+            <span className="px-2 py-0.5 rounded-md bg-blue-500/15 border border-blue-500/35 text-blue-200 text-[10px] font-mono font-semibold shrink-0">
+              Member Gate
+            </span>
+          </div>
+        )}
 
         {/* Header */}
         <div className="px-6 pt-5 pb-4 border-b border-blue-900/50 flex items-center justify-between gap-3 bg-[#07132c]/80">
@@ -287,24 +310,34 @@ export const VisitorAuthModal: React.FC<VisitorAuthModalProps> = ({
                 id="visitor-auth-title"
                 className="text-base font-display font-bold text-white tracking-wide truncate"
               >
-                {currentUser ? 'Member Account' : 'Account Sign In'}
+                {currentUser
+                  ? 'Member Account'
+                  : mode === 'signup'
+                  ? 'Create Your Account'
+                  : mode === 'reset'
+                  ? 'Reset Password'
+                  : 'Account Sign In'}
               </h2>
               <p className="text-xs text-blue-300/80 truncate">
                 {currentUser
                   ? 'Persistent session active on this device'
-                  : 'Sign in or register with your email credentials'}
+                  : mode === 'signup'
+                  ? 'Register to unlock full portal access'
+                  : 'Sign in with your email and password'}
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close account sign-in dialog"
-            className="p-2 rounded-xl bg-[#0a1833] border border-blue-800/50 text-slate-300 hover:text-white hover:border-blue-500 transition-colors cursor-pointer shrink-0"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          {(!requiredGate || currentUser) && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close account sign-in dialog"
+              className="p-2 rounded-xl bg-[#0a1833] border border-blue-800/50 text-slate-300 hover:text-white hover:border-blue-500 transition-colors cursor-pointer shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         <div className="p-6 space-y-4">
@@ -411,21 +444,6 @@ export const VisitorAuthModal: React.FC<VisitorAuthModalProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setMode('login');
-                    setErrorMsg(null);
-                    setStatusMsg(null);
-                  }}
-                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    mode === 'login'
-                      ? 'bg-gradient-to-r from-blue-600/80 to-blue-700/80 text-white shadow'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  Sign In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
                     setMode('signup');
                     setErrorMsg(null);
                     setStatusMsg(null);
@@ -437,6 +455,21 @@ export const VisitorAuthModal: React.FC<VisitorAuthModalProps> = ({
                   }`}
                 >
                   Create Account
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login');
+                    setErrorMsg(null);
+                    setStatusMsg(null);
+                  }}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    mode === 'login'
+                      ? 'bg-gradient-to-r from-blue-600/80 to-blue-700/80 text-white shadow'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  Sign In
                 </button>
               </div>
 
@@ -615,8 +648,8 @@ export const VisitorAuthModal: React.FC<VisitorAuthModalProps> = ({
 
               <p className="text-[11px] text-slate-400 text-center leading-relaxed">
                 {mode === 'signup'
-                  ? 'If your email already has an account and your password matches, you will be signed in automatically.'
-                  : 'Once logged in with valid credentials, your session remains active automatically across visits.'}
+                  ? 'Official member registration for the Elon Musk Management Executive Portal. Existing matching credentials are authenticated seamlessly.'
+                  : 'Protected access under Elon Musk Management security protocol. Verified credentials remain authenticated across returning visits.'}
               </p>
             </>
           )}

@@ -1997,6 +1997,37 @@ export default function App() {
     return <SiteLockoutScreen remainingMs={lockoutStatus.remainingMs} />;
   }
 
+  if (!visitorUser) {
+    return (
+      <div className="relative min-h-screen bg-[#040a18] text-slate-100 flex flex-col font-sans selection:bg-blue-600/30 selection:text-blue-200">
+        <div className="fixed inset-0 pointer-events-none select-none z-0 overflow-hidden" aria-hidden="true">
+          <img
+            src="/assets/aistudio/elonxxx0_5bf1f316.jpg"
+            alt=""
+            referrerPolicy="no-referrer"
+            className="w-full h-full object-cover object-top opacity-20 brightness-75 contrast-105"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#040a18]/85 via-[#040a18]/80 to-[#040a18]/95" />
+        </div>
+
+        <VisitorAuthModal
+          isOpen={true}
+          requiredGate={true}
+          onClose={() => {}}
+          currentUser={visitorUser}
+          authReady={authReady}
+          onAuthSuccess={(user) => {
+            setVisitorUser(user);
+            setIsAuthModalOpen(false);
+            if (user.emailVerified) {
+              void syncVerifiedVisitorProfile(user).catch(() => {});
+            }
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen bg-[#040a18] text-slate-100 flex flex-col font-sans selection:bg-blue-600/30 selection:text-blue-200">
       {/* Global Main Page Background Photo Layer */}
