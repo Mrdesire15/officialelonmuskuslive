@@ -22,8 +22,6 @@ import {
   HeartHandshake,
   Bell,
   BellRing,
-  LogIn,
-  UserCheck,
 } from 'lucide-react';
 import { PageId, PageDefinition } from '../types';
 import { PAGES_CONFIG } from '../data/pagesData';
@@ -50,9 +48,6 @@ interface NavbarProps {
   onOpenNotificationSettings?: () => void;
   phoneNotificationsReady?: boolean;
   soundEnabled?: boolean;
-  visitorEmail?: string | null;
-  visitorName?: string | null;
-  onOpenAuthModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -76,9 +71,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenNotificationSettings,
   phoneNotificationsReady = false,
   soundEnabled = true,
-  visitorEmail = null,
-  visitorName = null,
-  onOpenAuthModal,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const logoTapCountRef = useRef(0);
@@ -333,37 +325,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </button>
 
-              {/* Visitor Email Login / Account Key */}
-              {onOpenAuthModal && (
-                <button
-                  onClick={onOpenAuthModal}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer shadow-sm whitespace-nowrap shrink-0 max-w-[150px] ${
-                    visitorEmail
-                      ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-200 hover:bg-emerald-500/25'
-                      : 'bg-[#08152e] border-blue-600/50 text-blue-100 hover:bg-blue-600/25 hover:text-white'
-                  }`}
-                  title={
-                    visitorEmail
-                      ? `Signed in as ${visitorEmail} (Auto-Login Active)`
-                      : 'Account Sign In / Create Account'
-                  }
-                >
-                  {visitorEmail ? (
-                    <>
-                      <UserCheck className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
-                      <span className="truncate">
-                        {visitorName || visitorEmail.split('@')[0]}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <LogIn className="w-3.5 h-3.5 text-blue-300 shrink-0" />
-                      <span>Sign In</span>
-                    </>
-                  )}
-                </button>
-              )}
-
               {/* Hidden Admin Portal is accessed by tapping the X logo 4 times */}
 
               {/* Admin Content Studio Key */}
@@ -425,25 +386,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               VIP Pass
             </button>
-
-            {onOpenAuthModal && (
-              <button
-                onClick={onOpenAuthModal}
-                className={`p-2 rounded-xl border cursor-pointer shrink-0 ${
-                  visitorEmail
-                    ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-200'
-                    : 'bg-[#08152e] border-blue-800/70 text-blue-200'
-                }`}
-                aria-label={visitorEmail ? `Signed in as ${visitorEmail}` : 'Account Sign In'}
-                title={visitorEmail ? `Signed in: ${visitorEmail}` : 'Account Sign In'}
-              >
-                {visitorEmail ? (
-                  <UserCheck className="w-4 h-4 text-emerald-300" />
-                ) : (
-                  <LogIn className="w-4 h-4 text-blue-300" />
-                )}
-              </button>
-            )}
 
             <button
               onClick={() => setMobileMenuOpen((prev) => !prev)}
@@ -538,31 +480,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <BellRing className="w-3.5 h-3.5 text-blue-300" />
                 <span>Phone Notifications &amp; App Sound</span>
-              </button>
-            )}
-            {onOpenAuthModal && (
-              <button
-                onClick={() => {
-                  onOpenAuthModal();
-                  setMobileMenuOpen(false);
-                }}
-                className={`py-2.5 px-3 rounded-xl border text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 ${
-                  visitorEmail
-                    ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-200'
-                    : 'bg-[#08152e] border-blue-500/45 text-blue-100'
-                }`}
-              >
-                {visitorEmail ? (
-                  <>
-                    <UserCheck className="w-3.5 h-3.5 text-emerald-300" />
-                    <span className="truncate">Account: {visitorName || visitorEmail}</span>
-                  </>
-                ) : (
-                  <>
-                    <LogIn className="w-3.5 h-3.5 text-blue-300" />
-                    <span>Account Sign In / Register</span>
-                  </>
-                )}
               </button>
             )}
             <PWAInstallButton className="w-full py-2.5" />

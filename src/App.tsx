@@ -5,8 +5,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { BellRing, X } from 'lucide-react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, syncVerifiedVisitorProfile } from './firebase';
 import { 
   INITIAL_PROFILE, 
   INITIAL_COMPANIES, 
@@ -57,7 +55,6 @@ import { ShareCertificateModal } from './components/ShareCertificateModal';
 import { ReferralModal } from './components/ReferralModal';
 import { CharityDonationModal } from './components/CharityDonationModal';
 import { NotificationSettingsModal } from './components/NotificationSettingsModal';
-import { VisitorAuthModal } from './components/VisitorAuthModal';
 import { SiteLockoutScreen } from './components/SiteLockoutScreen';
 import { Footer } from './components/Footer';
 import {
@@ -371,11 +368,6 @@ export default function App() {
   const [isCharityOpen, setIsCharityOpen] = useState<boolean>(false);
   const [shareModalInitialQty, setShareModalInitialQty] = useState<number>(25);
   const [selectedShareCertOrder, setSelectedShareCertOrder] = useState<TeslaShareOrder | null>(null);
-
-  // Visitor Email Authentication State (automatically persisted across visits)
-  const [visitorUser, setVisitorUser] = useState<User | null>(null);
-  const [authReady, setAuthReady] = useState<boolean>(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [lockoutStatus, setLockoutStatus] = useState<LockoutStatus>(() => getLockoutStatus());
 
   // Mobile Phone Notifications & App Sound State
@@ -520,18 +512,6 @@ export default function App() {
       console.warn('LocalStorage save failed for inbox', e);
     }
   }, [inboxMessages]);
-
-  // Subscribe to Firebase Auth state for automatic returning-visitor sign-in persistence
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setVisitorUser(user);
-      setAuthReady(true);
-      if (user && user.emailVerified) {
-        void syncVerifiedVisitorProfile(user).catch(() => {});
-      }
-    });
-    return () => unsubscribe();
-  }, []);
 
   // Unlock Web Audio API on first user gesture and sync notification permission / SW clicks
   useEffect(() => {
@@ -1997,37 +1977,6 @@ export default function App() {
     return <SiteLockoutScreen remainingMs={lockoutStatus.remainingMs} />;
   }
 
-  if (!visitorUser) {
-    return (
-      <div className="relative min-h-screen bg-[#040a18] text-slate-100 flex flex-col font-sans selection:bg-blue-600/30 selection:text-blue-200">
-        <div className="fixed inset-0 pointer-events-none select-none z-0 overflow-hidden" aria-hidden="true">
-          <img
-            src="/assets/aistudio/elonxxx0_5bf1f316.jpg"
-            alt=""
-            referrerPolicy="no-referrer"
-            className="w-full h-full object-cover object-top opacity-20 brightness-75 contrast-105"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#040a18]/85 via-[#040a18]/80 to-[#040a18]/95" />
-        </div>
-
-        <VisitorAuthModal
-          isOpen={true}
-          requiredGate={true}
-          onClose={() => {}}
-          currentUser={visitorUser}
-          authReady={authReady}
-          onAuthSuccess={(user) => {
-            setVisitorUser(user);
-            setIsAuthModalOpen(false);
-            if (user.emailVerified) {
-              void syncVerifiedVisitorProfile(user).catch(() => {});
-            }
-          }}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="relative min-h-screen bg-[#040a18] text-slate-100 flex flex-col font-sans selection:bg-blue-600/30 selection:text-blue-200">
       {/* Global Main Page Background Photo Layer */}
@@ -2063,9 +2012,6 @@ export default function App() {
         onOpenNotificationSettings={() => setIsNotificationSettingsOpen(true)}
         phoneNotificationsReady={phoneNotificationsReady}
         soundEnabled={soundEnabled}
-        visitorEmail={visitorUser?.email || null}
-        visitorName={visitorUser?.displayName || null}
-        onOpenAuthModal={() => setIsAuthModalOpen(true)}
       />
 
       {/* Subtle Phone Notification & Sound Opt-In Bar when browser permission is not yet decided */}
@@ -2340,8 +2286,6 @@ export default function App() {
         paymentAccountRequests={paymentAccountRequests}
         onRequestPaymentAccount={handleRequestPaymentAccount}
         onOpenInbox={() => setIsInboxOpen(true)}
-        defaultCustomerName={visitorUser?.displayName || ''}
-        defaultCustomerEmail={visitorUser?.email || ''}
       />
 
       {/* My Active Tesla Orders Tracker Modal */}
@@ -2441,8 +2385,6 @@ export default function App() {
         }}
         defaultReferralCode={appliedReferralCode}
         commissionPercent={commissionPercent}
-        defaultInvestorName={visitorUser?.displayName || ''}
-        defaultInvestorEmail={visitorUser?.email || ''}
       />
 
       {/* Official Delaware Stock Ownership Certificate Modal */}
@@ -2479,8 +2421,6 @@ export default function App() {
         onOpenInbox={() => setIsInboxOpen(true)}
         defaultReferralCode={appliedReferralCode}
         commissionPercent={commissionPercent}
-        defaultName={visitorUser?.displayName || ''}
-        defaultEmail={visitorUser?.email || ''}
       />
 
       {/* Visitor Referral Code & Commission Earnings Modal */}
@@ -2504,22 +2444,6 @@ export default function App() {
         paymentAccountRequests={paymentAccountRequests}
         onRequestPaymentAccount={handleRequestPaymentAccount}
         onOpenInbox={() => setIsInboxOpen(true)}
-        defaultVisitorName={visitorUser?.displayName || ''}
-        defaultVisitorEmail={visitorUser?.email || ''}
-      />
-
-      {/* Visitor Email & Password Auto-Login Modal */}
-      <VisitorAuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        currentUser={visitorUser}
-        authReady={authReady}
-        onAuthSuccess={(user) => {
-          setVisitorUser(user);
-          if (user.emailVerified) {
-            void syncVerifiedVisitorProfile(user).catch(() => {});
-          }
-        }}
       />
 
       {/* Phone Notifications & Sound Settings Modal */}
