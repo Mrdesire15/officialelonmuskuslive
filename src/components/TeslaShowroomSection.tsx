@@ -23,6 +23,7 @@ import {
 import { TeslaVehicle, VehicleDetailedSpecs, PageId, MerchProduct } from '../types';
 import { TESLA_VEHICLES, getVehicleDetailedSpecs } from '../data/teslaVehicles';
 import { MERCH_PRODUCTS } from '../data/merchProducts';
+import { handleImageFallback, normalizePhotoSrc } from '../utils/photoHelper';
 
 interface TeslaShowroomSectionProps {
   onSelectVehicleToOrder: (vehicle: TeslaVehicle) => void;
@@ -366,7 +367,7 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
                   className="rounded-2xl bg-[#08142b]/95 border border-blue-900/60 hover:border-blue-400/60 transition-all overflow-hidden flex flex-col justify-between shadow-lg"
                 >
                   {/* Studio Product Image */}
-                  <div className="relative aspect-[4/3] bg-[#040a18] overflow-hidden border-b border-blue-900/60">
+                  <div className="relative w-full aspect-[4/3] min-h-[200px] bg-[#040a18] overflow-hidden border-b border-blue-900/60">
                     {isBroken ? (
                       <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 p-6 text-center">
                         <Package className="w-10 h-10 text-blue-400 mb-2" />
@@ -374,8 +375,10 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
                       </div>
                     ) : (
                       <img
-                        src={product.image}
+                        src={normalizePhotoSrc(product.image)}
                         alt={`${product.name} studio photograph`}
+                        loading="eager"
+                        decoding="async"
                         referrerPolicy="no-referrer"
                         onError={() =>
                           setBrokenMerchImages((prev) => ({ ...prev, [product.id]: true }))
@@ -525,11 +528,14 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
         <div className="mb-14 p-6 sm:p-8 rounded-2xl bg-[#08142b]/95 border border-blue-500/45 shadow-2xl relative overflow-hidden backdrop-blur-2xl">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             {/* Visual */}
-            <div className="lg:col-span-6 relative aspect-[16/10] rounded-xl overflow-hidden bg-[#040a18] border border-blue-800/60 group">
+            <div className="lg:col-span-6 relative w-full aspect-[16/10] min-h-[190px] rounded-xl overflow-hidden bg-[#040a18] border border-blue-800/60 group">
               <img
-                src={haloVehicle.image}
+                src={normalizePhotoSrc(haloVehicle.image)}
                 alt={haloVehicle.name}
+                loading="eager"
+                decoding="async"
                 referrerPolicy="no-referrer"
+                onError={(e) => handleImageFallback(e)}
                 className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#040a18]/85 via-transparent to-transparent" />
@@ -1222,11 +1228,14 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
                     : 'border-blue-900/60 hover:border-blue-400/70'
                 }`}
               >
-                <div className="relative aspect-[16/10] bg-[#040a18] overflow-hidden">
+                <div className="relative w-full aspect-[16/10] min-h-[180px] bg-[#040a18] overflow-hidden">
                   <img
-                    src={vehicle.image}
+                    src={normalizePhotoSrc(vehicle.image)}
                     alt={vehicle.name}
+                    loading="eager"
+                    decoding="async"
                     referrerPolicy="no-referrer"
+                    onError={(e) => handleImageFallback(e)}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#040a18]/90 via-transparent to-transparent" />
@@ -1535,10 +1544,13 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
             {/* Top Preview Banner + Category Tabs */}
             <div className="p-5 border-b border-blue-900/60 bg-[#040a18]/70 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
-                <div className="md:col-span-5 relative aspect-[16/9] rounded-xl overflow-hidden bg-[#08142b] border border-blue-900/60">
+                <div className="md:col-span-5 relative w-full aspect-[16/9] min-h-[170px] rounded-xl overflow-hidden bg-[#08142b] border border-blue-900/60">
                   <img
-                    src={inspectedVehicle.image}
+                    src={normalizePhotoSrc(inspectedVehicle.image)}
                     alt={inspectedVehicle.name}
+                    loading="eager"
+                    decoding="async"
+                    onError={(e) => handleImageFallback(e)}
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#040a18]/80 via-transparent to-transparent" />

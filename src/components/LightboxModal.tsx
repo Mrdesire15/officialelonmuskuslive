@@ -10,6 +10,7 @@ import {
   Check
 } from 'lucide-react';
 import { GalleryImageData } from '../types';
+import { handleImageFallback, normalizePhotoSrc } from '../utils/photoHelper';
 
 interface LightboxModalProps {
   isOpen: boolean;
@@ -108,14 +109,17 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
       </button>
 
       {/* Lightbox Content Container */}
-      <div className="w-full max-w-6xl max-h-[88vh] grid grid-cols-1 lg:grid-cols-12 gap-6 items-center pt-10">
+      <div className="w-full max-w-6xl max-h-[90vh] overflow-y-auto lg:overflow-visible grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-center pt-12 pb-4">
         
         {/* Main Image Display */}
-        <div className="lg:col-span-8 flex items-center justify-center max-h-[70vh] lg:max-h-[80vh] overflow-hidden rounded-xl bg-[#040a18]/70 border border-blue-900/50 relative group">
+        <div className="lg:col-span-8 flex items-center justify-center min-h-[220px] max-h-[52vh] sm:max-h-[68vh] lg:max-h-[80vh] overflow-hidden rounded-xl bg-[#040a18]/70 border border-blue-900/50 relative group">
           <img
-            src={currentItem.image}
+            src={normalizePhotoSrc(currentItem.image)}
             alt={currentItem.title}
-            className="max-h-[68vh] lg:max-h-[78vh] w-auto max-w-full object-contain rounded-lg shadow-2xl transition-all"
+            loading="eager"
+            decoding="async"
+            onError={(e) => handleImageFallback(e)}
+            className="max-h-[50vh] sm:max-h-[68vh] lg:max-h-[78vh] w-full lg:w-auto max-w-full object-contain rounded-lg shadow-2xl transition-all"
           />
         </div>
 

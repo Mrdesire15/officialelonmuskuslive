@@ -32,8 +32,8 @@ export const Footer: React.FC<FooterProps> = ({
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 via-blue-700 to-red-600 border border-white/20 flex items-center justify-center text-white font-display font-black text-sm">
                 X
               </div>
-              <span className="font-display font-bold text-white tracking-wider text-base">
-                ELON MUSK · GREET & MEET
+              <span className="font-display font-bold text-white tracking-wide text-sm sm:text-base leading-snug">
+                Elon Musk · Welcome &amp; Meet Experience
               </span>
             </div>
             <p className="text-slate-400 leading-relaxed max-w-sm text-xs">

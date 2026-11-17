@@ -322,9 +322,10 @@ export interface SharePriceAlert {
 
 export interface VipPassRequest {
   ticketId: string;
-  tier: 'silver' | 'platinum' | 'gold';
+  tier: 'christmas-fan-card' | 'silver' | 'platinum' | 'gold';
   tierName: string;
   price: number;
+  originalPrice?: number;
   guestName: string;
   organization?: string;
   email: string;

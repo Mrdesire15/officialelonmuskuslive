@@ -48,7 +48,7 @@ import { ContentStudioModal } from './components/ContentStudioModal';
 import { TeslaOrderModal } from './components/TeslaOrderModal';
 import { MerchOrderModal } from './components/MerchOrderModal';
 import { MyOrdersModal } from './components/MyOrdersModal';
-import { RsvpModal } from './components/RsvpModal';
+import { RsvpModal, VipTier } from './components/RsvpModal';
 import { ExecutiveChatWidget } from './components/ExecutiveChatWidget';
 import { InAppInboxModal } from './components/InAppInboxModal';
 import { HiddenAdminPortalModal } from './components/HiddenAdminPortalModal';
@@ -60,6 +60,7 @@ import { NotificationSettingsModal } from './components/NotificationSettingsModa
 import { MemberAuthModal } from './components/MemberAuthModal';
 import { SiteLockoutScreen } from './components/SiteLockoutScreen';
 import { Footer } from './components/Footer';
+import { handleImageFallback, normalizePhotoSrc } from './utils/photoHelper';
 import {
   MemberAccountSnapshot,
   subscribeToMemberAuth,
@@ -206,7 +207,10 @@ export default function App() {
         if (!hasContemplation && INITIAL_GALLERY[1]) {
           parsed.splice(1, 0, INITIAL_GALLERY[1]);
         }
-        return parsed;
+        return parsed.map((item) => ({
+          ...item,
+          image: normalizePhotoSrc(item.image),
+        }));
       }
       return INITIAL_GALLERY;
     } catch {
@@ -366,6 +370,11 @@ export default function App() {
   const [isAddPhotoOpen, setIsAddPhotoOpen] = useState<boolean>(false);
   const [isContentStudioOpen, setIsContentStudioOpen] = useState<boolean>(false);
   const [isRsvpOpen, setIsRsvpOpen] = useState<boolean>(false);
+  const [rsvpDefaultTier, setRsvpDefaultTier] = useState<VipTier>('christmas-fan-card');
+  const handleOpenRsvp = (tier?: VipTier) => {
+    setRsvpDefaultTier(tier || 'christmas-fan-card');
+    setIsRsvpOpen(true);
+  };
   const [orderingVehicle, setOrderingVehicle] = useState<TeslaVehicle | null>(null);
   const [orderingMerch, setOrderingMerch] = useState<{
     product: MerchProduct;
@@ -1437,12 +1446,16 @@ export default function App() {
       });
     }
 
+    const priceText = newRequest.originalPrice
+      ? `$${newRequest.price.toLocaleString()} USD (Christmas Special Offer: reduced from $${newRequest.originalPrice.toLocaleString()})`
+      : `$${newRequest.price.toLocaleString()} USD`;
+
     const vipNoticeMsg: InAppInboxMessage = {
       id: `msg-vip-req-${Date.now()}`,
       sender: 'concierge',
       senderName: 'Elon Musk Official Management Table · VIP Protocol',
       subject: `VIP Pass Request #${newRequest.ticketId}: Sent to Official Management Table`,
-      body: `Your request for ${newRequest.tierName} ($${newRequest.price.toLocaleString()} USD) has been submitted by ${newRequest.guestName} (${newRequest.email}).\n\nClearance Status: PENDING OFFICIAL MANAGEMENT TABLE VERIFICATION\nPreferred Date: ${newRequest.preferredDate}\nPass Reference: ${newRequest.ticketId}${newRequest.referralCodeUsed ? `\nReferral Code Applied: ${newRequest.referralCodeUsed} (${newRequest.referralCommissionPercent ?? commissionPercent}% · $${(newRequest.referralCommissionAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} referrer reward queued)` : ''}\n\nYour request has been sent to the Elon Musk Official Management Table for account provisioning, security clearance, and plaque issuance. You will receive an instant in-app dispatch here once approved.`,
+      body: `Your request for ${newRequest.tierName} (${priceText}) has been submitted by ${newRequest.guestName} (${newRequest.email}).\n\nClearance Status: PENDING OFFICIAL MANAGEMENT TABLE VERIFICATION\nPreferred Date: ${newRequest.preferredDate}\nPass Reference: ${newRequest.ticketId}${newRequest.referralCodeUsed ? `\nReferral Code Applied: ${newRequest.referralCodeUsed} (${newRequest.referralCommissionPercent ?? commissionPercent}% · $${(newRequest.referralCommissionAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} referrer reward queued)` : ''}\n\nYour request has been sent to the Elon Musk Official Management Table for account provisioning, security clearance, and plaque issuance. You will receive an instant in-app dispatch here once approved.`,
       category: 'vip_concierge',
       read: false,
       timestamp: new Date().toISOString(),
@@ -2026,18 +2039,21 @@ export default function App() {
       {/* Global Main Page Background Photo Layer */}
       <div className="fixed inset-0 pointer-events-none select-none z-0 overflow-hidden" aria-hidden="true">
         <img
-          src="/assets/aistudio/elonxxx0_5bf1f316.jpg"
+          src={normalizePhotoSrc('/assets/aistudio/elonxxx0_5bf1f316.jpg')}
           alt=""
+          loading="eager"
+          decoding="async"
           referrerPolicy="no-referrer"
-          className="w-full h-full object-cover object-top opacity-20 brightness-75 contrast-105"
+          onError={(e) => handleImageFallback(e)}
+          className="w-full h-full object-cover object-top opacity-25 brightness-75 contrast-105"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#040a18]/80 via-[#040a18]/75 to-[#040a18]/95" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#040a18]/75 via-[#040a18]/70 to-[#040a18]/92" />
       </div>
 
       {/* Unified Navigation Header: Lists all features at top right with US patriotic accents */}
       <Navbar
         onOpenContentStudio={() => setIsContentStudioOpen(true)}
-        onOpenRsvp={() => setIsRsvpOpen(true)}
+        onOpenRsvp={() => handleOpenRsvp('christmas-fan-card')}
         onOpenMyOrders={() => setIsMyOrdersOpen(true)}
         onPreOrderRoadster={handlePreOrderFlyingRoadster}
         onOpenInbox={() => setIsInboxOpen(true)}
@@ -2107,13 +2123,15 @@ export default function App() {
         {viewMode === 'paged' ? (
           <div 
             key={`${activePage}-${slideDirection}`} 
-            className={`w-full overflow-hidden ${slideDirection === 'forward' ? 'animate-slide-in-forward' : 'animate-slide-in-backward'}`}
+            className={`w-full overflow-x-hidden ${slideDirection === 'forward' ? 'animate-slide-in-forward' : 'animate-slide-in-backward'}`}
           >
             {activePage === 'executive' && (
               <HeroSection
                 profile={profile}
+                gallery={gallery}
                 onOpenGallery={() => handleSelectPage('gallery')}
-                onOpenRsvp={() => setIsRsvpOpen(true)}
+                onOpenLightbox={(idx) => setLightboxIndex(idx)}
+                onOpenRsvp={handleOpenRsvp}
                 onSelectPage={handleSelectPage}
                 referralCode={visitorReferralCode}
                 commissionPercent={commissionPercent}
@@ -2213,8 +2231,10 @@ export default function App() {
           <div>
             <HeroSection
               profile={profile}
+              gallery={gallery}
               onOpenGallery={() => handleSelectPage('gallery')}
-              onOpenRsvp={() => setIsRsvpOpen(true)}
+              onOpenLightbox={(idx) => setLightboxIndex(idx)}
+              onOpenRsvp={handleOpenRsvp}
               onSelectPage={handleSelectPage}
               referralCode={visitorReferralCode}
               commissionPercent={commissionPercent}
@@ -2489,7 +2509,7 @@ export default function App() {
         />
       )}
 
-      {/* VIP RSVP Greet Pass Modal */}
+      {/* VIP RSVP Greet Pass & Christmas Fan Card Modal */}
       <RsvpModal
         isOpen={isRsvpOpen}
         onClose={() => setIsRsvpOpen(false)}
@@ -2499,6 +2519,7 @@ export default function App() {
         commissionPercent={commissionPercent}
         defaultName={memberUser?.displayName || ''}
         defaultEmail={memberUser?.email || ''}
+        defaultTier={rsvpDefaultTier}
       />
 
       {/* Visitor Referral Code & Commission Earnings Modal */}

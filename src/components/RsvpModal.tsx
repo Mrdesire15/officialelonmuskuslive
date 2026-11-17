@@ -14,9 +14,11 @@ import {
   CreditCard,
   Building,
   Image as ImageIcon,
-  Mail
+  Mail,
+  Gift
 } from 'lucide-react';
 import { VipPassRequest } from '../types';
+import { handleImageFallback, normalizePhotoSrc } from '../utils/photoHelper';
 
 interface RsvpModalProps {
   isOpen: boolean;
@@ -27,15 +29,19 @@ interface RsvpModalProps {
   commissionPercent?: number;
   defaultName?: string;
   defaultEmail?: string;
+  defaultTier?: VipTier;
 }
 
-export type VipTier = 'silver' | 'platinum' | 'gold';
+export type VipTier = 'christmas-fan-card' | 'silver' | 'platinum' | 'gold';
 
 interface VipTierInfo {
   id: VipTier;
   name: string;
+  shortLabel: string;
   price: number;
+  originalPrice?: number;
   badge: string;
+  promoTag?: string;
   plaqueClass: string;
   textColor: string;
   description: string;
@@ -44,8 +50,29 @@ interface VipTierInfo {
 
 const VIP_TIERS: VipTierInfo[] = [
   {
+    id: 'christmas-fan-card',
+    name: 'Fan Card · Christmas Special Offer (Meet Elon Musk)',
+    shortLabel: 'Christmas Fan Card',
+    price: 1000,
+    originalPrice: 5000,
+    badge: 'CHRISTMAS LIMITED EDITION',
+    promoTag: 'LIMITED EDITION · $5,000 DOWN TO $1,000',
+    plaqueClass: 'plaque-christmas',
+    textColor: 'engraved-christmas-text',
+    description:
+      'Christmas Special Offer Fan Card to Meet Elon Musk — Limited Edition Platinum-tier collector card reduced from $5,000 down to $1,000.',
+    perks: [
+      'Limited Edition serialized Christmas Fan Card to meet Elon Musk',
+      'Holiday Greet & Meet VIP photo opportunity & autograph slot',
+      '$5,000 VIP experience markdown down to $1,000 (Save $4,000)',
+      'Custom crimson-gold collector Fan Card & velvet presentation sleeve',
+      'Priority Starbase & Gigafactory Texas visitor clearance',
+    ],
+  },
+  {
     id: 'silver',
     name: 'Silver Experience Pass',
+    shortLabel: 'Silver Plaque',
     price: 1000,
     badge: 'SILVER TIER',
     plaqueClass: 'plaque-silver',
@@ -61,6 +88,7 @@ const VIP_TIERS: VipTierInfo[] = [
   {
     id: 'platinum',
     name: 'Platinum Experience Pass',
+    shortLabel: 'Platinum Plaque',
     price: 5000,
     badge: 'PLATINUM TIER',
     plaqueClass: 'plaque-platinum',
@@ -77,6 +105,7 @@ const VIP_TIERS: VipTierInfo[] = [
   {
     id: 'gold',
     name: 'Gold Founders Plaque Pass',
+    shortLabel: 'Gold Plaque',
     price: 10000,
     badge: 'GOLD FOUNDERS TIER',
     plaqueClass: 'plaque-gold',
@@ -101,8 +130,9 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({
   commissionPercent = 5,
   defaultName = '',
   defaultEmail = '',
+  defaultTier = 'christmas-fan-card',
 }) => {
-  const [selectedTier, setSelectedTier] = useState<VipTier>('gold');
+  const [selectedTier, setSelectedTier] = useState<VipTier>(defaultTier);
   const [submitted, setSubmitted] = useState(false);
 
   // Form Fields
@@ -110,9 +140,14 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({
   const [organization, setOrganization] = useState('');
   const [email, setEmail] = useState('');
   const [purpose, setPurpose] = useState('executive-briefing');
-  const [preferredDate, setPreferredDate] = useState('2026-11-20');
+  const [preferredDate, setPreferredDate] = useState('2026-12-20');
   const [referralCodeInput, setReferralCodeInput] = useState(defaultReferralCode);
   const [ticketId, setTicketId] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setSelectedTier(defaultTier);
+  }, [isOpen, defaultTier]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -122,12 +157,13 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({
 
   if (!isOpen) return null;
 
-  const currentTier = VIP_TIERS.find((t) => t.id === selectedTier) || VIP_TIERS[2];
+  const currentTier = VIP_TIERS.find((t) => t.id === selectedTier) || VIP_TIERS[0];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email) return;
-    const generatedId = `EM-${selectedTier.toUpperCase()}-${Math.floor(100000 + Math.random() * 900000)}`;
+    const prefixCode = selectedTier === 'christmas-fan-card' ? 'XMAS' : selectedTier.toUpperCase();
+    const generatedId = `EM-${prefixCode}-${Math.floor(100000 + Math.random() * 900000)}`;
     const now = new Date();
     const normalizedRef = referralCodeInput.trim().toUpperCase();
     const vipRequest: VipPassRequest = {
@@ -135,6 +171,7 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({
       tier: selectedTier,
       tierName: currentTier.name,
       price: currentTier.price,
+      originalPrice: currentTier.originalPrice,
       guestName: name.trim(),
       organization: organization.trim() || undefined,
       email: email.trim(),
@@ -173,23 +210,23 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({
               <Award className="w-5 h-5 text-white" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-display font-bold text-lg text-white">
-                  Elon Musk · Exclusive Greet & Meet Experience
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-display font-bold text-base sm:text-lg text-white">
+                  Elon Musk · Exclusive Greet &amp; Meet Experience
                 </h3>
                 <span className="text-[10px] font-mono tabular-nums font-bold px-2 py-0.5 rounded bg-red-600/25 text-red-200 border border-red-400/50">
-                  $1,000 – $10,000 VIP Passes
+                  Christmas Special Fan Card · $5,000 → $1,000
                 </span>
               </div>
               <p className="text-xs text-blue-200/80">
-                Official commemorative metal plaque pass & private access to Starbase and Gigafactory Texas
+                Official commemorative Fan Card &amp; metal plaque pass with private access to Starbase and Gigafactory Texas
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-blue-900/50 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-blue-900/50 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
@@ -197,23 +234,28 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({
 
         {/* Modal Body */}
         {!submitted ? (
-          <div className="p-6 overflow-y-auto flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="p-4 sm:p-6 overflow-y-auto flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
             
-            {/* Left Column: Metallic Plaque Live Preview */}
+            {/* Left Column: Metallic Plaque / Fan Card Live Preview */}
             <div className="lg:col-span-5 space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">
-                  Plaque Design Preview
+                  {selectedTier === 'christmas-fan-card' ? 'Limited Edition Fan Card Preview' : 'Plaque Design Preview'}
                 </span>
+                {currentTier.originalPrice && (
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-400/50">
+                    SAVE ${(currentTier.originalPrice - currentTier.price).toLocaleString()}
+                  </span>
+                )}
               </div>
 
-              {/* The custom Elon Musk Brushed Metal Plaque */}
-              <div className="relative p-2 rounded-2xl bg-[#040a18] shadow-2xl border border-blue-900/60">
+              {/* The custom Elon Musk Brushed Metal Plaque / Fan Card */}
+              <div className="relative p-2 rounded-2xl bg-[#040a18] shadow-2xl border border-blue-900/60 max-w-xs sm:max-w-sm mx-auto lg:max-w-none">
                 {/* Outer Beveled Metal Plaque Container */}
                 <div
-                  className={`relative w-full aspect-[4/6] rounded-xl p-5 flex flex-col justify-between items-center text-center transition-all duration-500 overflow-hidden ${currentTier.plaqueClass}`}
+                  className={`relative w-full aspect-[4/5] sm:aspect-[4/6] rounded-xl p-5 flex flex-col justify-between items-center text-center transition-all duration-500 overflow-hidden ${currentTier.plaqueClass}`}
                 >
-                  {/* Double debossed inner border frame (matching reference photo) */}
+                  {/* Double debossed inner border frame */}
                   <div className="absolute inset-2.5 rounded-lg border border-black/25 pointer-events-none" />
                   <div className="absolute inset-3.5 rounded-md border border-white/40 pointer-events-none" />
 
@@ -224,53 +266,105 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({
                     >
                       ELON MUSK
                     </h4>
-                    <div className="text-[9px] font-mono font-semibold tracking-widest text-black/70 uppercase">
-                      CHIEF ENGINEER & TECHNOLOGIST
+                    <div
+                      className={`text-[9px] font-mono font-semibold tracking-widest uppercase ${
+                        selectedTier === 'christmas-fan-card' ? 'text-amber-200' : 'text-black/70'
+                      }`}
+                    >
+                      {selectedTier === 'christmas-fan-card'
+                        ? 'CHRISTMAS SPECIAL · FAN CARD'
+                        : 'CHIEF ENGINEER & TECHNOLOGIST'}
                     </div>
                   </div>
 
-                  {/* Center: Aerospace & Energy Emblem */}
-                  <div className="relative z-10 my-auto space-y-3">
-                    {/* Custom Elon Emblem replacing film reel */}
-                    <div className="w-14 h-14 rounded-full border-2 border-black/40 flex items-center justify-center mx-auto bg-black/5 shadow-inner">
-                      <div className="flex items-center gap-1 text-black/80">
-                        <Rocket className="w-5 h-5" />
-                        <Zap className="w-4 h-4" />
-                      </div>
+                  {/* Center: Aerospace & Holiday Emblem */}
+                  <div className="relative z-10 my-auto space-y-2.5">
+                    <div
+                      className={`w-14 h-14 rounded-full border-2 flex items-center justify-center mx-auto shadow-inner ${
+                        selectedTier === 'christmas-fan-card'
+                          ? 'border-amber-300/80 bg-red-950/50'
+                          : 'border-black/40 bg-black/5'
+                      }`}
+                    >
+                      {selectedTier === 'christmas-fan-card' ? (
+                        <Gift className="w-6 h-6 text-amber-300" />
+                      ) : (
+                        <div className="flex items-center gap-1 text-black/80">
+                          <Rocket className="w-5 h-5" />
+                          <Zap className="w-4 h-4" />
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-1">
-                      <div className="text-[11px] font-bold tracking-[0.25em] text-black/80 uppercase">
-                        EXCLUSIVE
+                      <div
+                        className={`text-[11px] font-bold tracking-[0.22em] uppercase ${
+                          selectedTier === 'christmas-fan-card' ? 'text-amber-200' : 'text-black/80'
+                        }`}
+                      >
+                        {selectedTier === 'christmas-fan-card' ? 'LIMITED EDITION' : 'EXCLUSIVE'}
                       </div>
                       <div
                         className={`font-display text-lg font-black tracking-[0.14em] uppercase leading-tight ${currentTier.textColor}`}
                       >
-                        GREET & MEET
+                        {selectedTier === 'christmas-fan-card' ? 'MEET ELON MUSK' : 'GREET & MEET'}
                       </div>
-                      <div className="text-[11px] font-bold tracking-[0.25em] text-black/80 uppercase">
-                        EXPERIENCE
+                      <div
+                        className={`text-[11px] font-bold tracking-[0.22em] uppercase ${
+                          selectedTier === 'christmas-fan-card' ? 'text-amber-100' : 'text-black/80'
+                        }`}
+                      >
+                        {selectedTier === 'christmas-fan-card' ? 'FAN CARD PASS' : 'EXPERIENCE'}
                       </div>
                     </div>
 
-                    <div className="text-[9px] font-mono tabular-nums font-semibold text-black/70 tracking-widest uppercase">
-                      {currentTier.badge} · ${currentTier.price.toLocaleString()}
+                    <div
+                      className={`text-[10px] font-mono tabular-nums font-bold tracking-wider uppercase flex items-center justify-center gap-2 ${
+                        selectedTier === 'christmas-fan-card' ? 'text-amber-200' : 'text-black/75'
+                      }`}
+                    >
+                      <span>{currentTier.badge}</span>
+                      <span>·</span>
+                      {currentTier.originalPrice ? (
+                        <span>
+                          <span className="line-through opacity-75 mr-1">
+                            ${currentTier.originalPrice.toLocaleString()}
+                          </span>
+                          <span className="text-white font-black">${currentTier.price.toLocaleString()}</span>
+                        </span>
+                      ) : (
+                        <span>${currentTier.price.toLocaleString()}</span>
+                      )}
                     </div>
                   </div>
 
-                  {/* Bottom: Elon Portrait Medallion Engraving */}
+                  {/* Bottom: Elon Portrait Medallion */}
                   <div className="relative z-10 pb-2 flex flex-col items-center">
-                    <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-black/40 shadow-md bg-stone-300 relative group">
+                    <div
+                      className={`w-20 h-20 rounded-full overflow-hidden border-2 shadow-md bg-stone-300 relative group ${
+                        selectedTier === 'christmas-fan-card' ? 'border-amber-300/80' : 'border-black/40'
+                      }`}
+                    >
                       <img
-                        src="/assets/aistudio/elo_e882ff2e.webp"
+                        src={normalizePhotoSrc('/assets/aistudio/elo_e882ff2e.webp')}
                         alt="Elon Musk Engraved Portrait"
-                        className="w-full h-full object-cover object-top grayscale contrast-125 brightness-95 filter"
+                        loading="eager"
+                        decoding="async"
+                        onError={(e) => handleImageFallback(e)}
+                        className={`w-full h-full object-cover object-top ${
+                          selectedTier === 'christmas-fan-card'
+                            ? 'contrast-110 brightness-100'
+                            : 'grayscale contrast-125 brightness-95 filter'
+                        }`}
                       />
-                      <div className="absolute inset-0 bg-amber-500/10 mix-blend-multiply" />
                     </div>
 
-                    <div className="text-[8px] font-mono font-semibold tracking-widest uppercase text-black/75 pt-1.5">
-                      {name ? `HONORED GUEST: ${name.toUpperCase()}` : 'VIP CLEARANCE · STARBASE & GIGA TEXAS'}
+                    <div
+                      className={`text-[8px] font-mono font-semibold tracking-widest uppercase pt-1.5 ${
+                        selectedTier === 'christmas-fan-card' ? 'text-amber-100' : 'text-black/75'
+                      }`}
+                    >
+                      {name ? `HONORED FAN: ${name.toUpperCase()}` : 'LIMITED EDITION · STARBASE & GIGA TEXAS'}
                     </div>
                   </div>
                 </div>
@@ -291,47 +385,72 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({
             {/* Right Column: Tier Selector & Checkout Form */}
             <div className="lg:col-span-7 space-y-6">
               
-              {/* VIP Tier Selector: Silver $1,000, Platinum $5,000, Gold $10,000 */}
+              {/* VIP Tier Selector: Christmas Special Fan Card ($5k -> $1k), Silver ($1k), Platinum ($5k), Gold ($10k) */}
               <div className="space-y-3">
                 <label className="text-xs font-bold text-slate-100 uppercase tracking-wider">
-                  Select Experience Plaque Tier
+                  Select Fan Card / Experience Plaque Tier
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {VIP_TIERS.map((tier) => {
                     const isSelected = selectedTier === tier.id;
+                    const isChristmas = tier.id === 'christmas-fan-card';
                     return (
                       <button
                         key={tier.id}
                         type="button"
                         onClick={() => setSelectedTier(tier.id)}
-                        className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+                        className={`p-3.5 sm:p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
                           isSelected
-                            ? tier.id === 'gold'
+                            ? isChristmas
+                              ? 'bg-gradient-to-br from-red-700/35 via-red-900/25 to-amber-600/20 border-amber-400 text-white shadow-lg shadow-red-600/25'
+                              : tier.id === 'gold'
                               ? 'bg-gradient-to-br from-blue-600/25 to-red-600/20 border-red-400 text-white shadow-lg shadow-red-500/15'
                               : 'bg-blue-600/25 border-blue-400 text-white shadow-lg'
+                            : isChristmas
+                            ? 'bg-gradient-to-br from-red-950/55 to-[#08142b] border-red-500/55 text-slate-200 hover:border-amber-400'
                             : 'bg-[#08142b] border-blue-900/60 text-slate-300 hover:border-blue-500/60'
                         }`}
                       >
                         <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`text-[10px] font-bold uppercase tracking-wider font-mono ${tier.id === 'gold' ? 'text-red-300' : 'text-blue-300'}`}>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span
+                              className={`text-[10px] font-bold uppercase tracking-wider font-mono ${
+                                isChristmas
+                                  ? 'text-amber-300'
+                                  : tier.id === 'gold'
+                                  ? 'text-red-300'
+                                  : 'text-blue-300'
+                              }`}
+                            >
                               {tier.badge}
                             </span>
                             {isSelected && (
-                              <div className="w-4 h-4 rounded-full bg-gradient-to-r from-blue-500 to-red-500 text-white flex items-center justify-center">
+                              <div className="w-4 h-4 rounded-full bg-gradient-to-r from-blue-500 to-red-500 text-white flex items-center justify-center shrink-0">
                                 <Check className="w-3 h-3 stroke-[3]" />
                               </div>
                             )}
                           </div>
-                          <div className="font-display font-bold text-lg text-white tabular-nums">
-                            ${tier.price.toLocaleString()}
+                          <div className="flex items-baseline gap-2 flex-wrap">
+                            {tier.originalPrice && (
+                              <span className="font-mono text-sm text-slate-400 line-through tabular-nums">
+                                ${tier.originalPrice.toLocaleString()}
+                              </span>
+                            )}
+                            <span className="font-display font-bold text-lg text-white tabular-nums">
+                              ${tier.price.toLocaleString()}
+                            </span>
+                            {tier.originalPrice && (
+                              <span className="text-[10px] font-mono font-bold text-emerald-300 uppercase">
+                                Save ${(tier.originalPrice - tier.price).toLocaleString()}
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs font-semibold text-slate-100 pt-0.5">
-                            {tier.name.split(' ')[0]} Plaque
+                            {tier.shortLabel}
                           </div>
                         </div>
 
-                        <div className="text-[11px] text-slate-300 pt-3 border-t border-blue-900/50 mt-2 line-clamp-2">
+                        <div className="text-[11px] text-slate-300 pt-2.5 border-t border-blue-900/50 mt-2 line-clamp-2">
                           {tier.description}
                         </div>
                       </button>
@@ -342,12 +461,19 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({
 
               {/* Tier Perks Details */}
               <div className="p-4 rounded-xl bg-[#08142b] border border-blue-900/60 space-y-2">
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <span className="font-semibold text-white">
                     Included with {currentTier.name}:
                   </span>
-                  <span className="text-blue-300 font-display font-bold font-mono tabular-nums text-sm">
-                    ${currentTier.price.toLocaleString()} USD
+                  <span className="text-blue-300 font-display font-bold font-mono tabular-nums text-sm flex items-center gap-1.5">
+                    {currentTier.originalPrice && (
+                      <span className="text-slate-400 line-through text-xs">
+                        ${currentTier.originalPrice.toLocaleString()}
+                      </span>
+                    )}
+                    <span className={currentTier.originalPrice ? 'text-amber-300' : ''}>
+                      ${currentTier.price.toLocaleString()} USD
+                    </span>
                   </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
@@ -459,16 +585,26 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({
                 </div>
 
                 {/* Submit / Purchase Button */}
-                <div className="pt-4 border-t border-blue-900/60 flex items-center justify-between gap-3">
-                  <div className="text-xs text-slate-300">
-                    Total: <strong className="text-white font-mono tabular-nums font-bold text-sm">${currentTier.price.toLocaleString()}</strong>
+                <div className="pt-4 border-t border-blue-900/60 flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-xs text-slate-300 flex items-center gap-2">
+                    <span>Total:</span>
+                    {currentTier.originalPrice && (
+                      <span className="font-mono line-through text-slate-400 tabular-nums">
+                        ${currentTier.originalPrice.toLocaleString()}
+                      </span>
+                    )}
+                    <strong className="text-white font-mono tabular-nums font-bold text-sm">
+                      ${currentTier.price.toLocaleString()}
+                    </strong>
                   </div>
 
                   <button
                     type="submit"
-                    className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 text-white font-semibold text-xs hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-blue-500/25 cursor-pointer flex items-center gap-2 whitespace-nowrap"
+                    className="w-full sm:w-auto px-5 sm:px-6 py-3 rounded-lg bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 text-white font-semibold text-xs hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-blue-500/25 cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap"
                   >
-                    <span>Reserve {currentTier.name.split(' ')[0]} Plaque Pass (${currentTier.price.toLocaleString()})</span>
+                    <span>
+                      Reserve {currentTier.shortLabel} (${currentTier.price.toLocaleString()})
+                    </span>
                   </button>
                 </div>
               </form>
@@ -532,16 +668,31 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({
                 <div className="relative z-10 pb-2 flex flex-col items-center">
                   <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-black/40 shadow-md bg-stone-300 relative">
                     <img
-                      src="/assets/aistudio/elo_e882ff2e.webp"
+                      src={normalizePhotoSrc('/assets/aistudio/elo_e882ff2e.webp')}
                       alt="Elon Musk Engraved Portrait"
-                      className="w-full h-full object-cover object-top grayscale contrast-125 filter"
+                      loading="eager"
+                      decoding="async"
+                      onError={(e) => handleImageFallback(e)}
+                      className={`w-full h-full object-cover object-top ${
+                        selectedTier === 'christmas-fan-card'
+                          ? 'contrast-110 brightness-100'
+                          : 'grayscale contrast-125 filter'
+                      }`}
                     />
                   </div>
 
-                  <div className="text-[9px] font-mono font-bold tracking-widest uppercase text-black/90 pt-2">
+                  <div
+                    className={`text-[9px] font-mono font-bold tracking-widest uppercase pt-2 ${
+                      selectedTier === 'christmas-fan-card' ? 'text-amber-100' : 'text-black/90'
+                    }`}
+                  >
                     ISSUED TO: {name.toUpperCase()}
                   </div>
-                  <div className="text-[8px] font-mono text-black/70">
+                  <div
+                    className={`text-[8px] font-mono ${
+                      selectedTier === 'christmas-fan-card' ? 'text-amber-200/90' : 'text-black/70'
+                    }`}
+                  >
                     {organization || 'INDEPENDENT DELEGATE'} · DATE: {preferredDate}
                   </div>
                 </div>
@@ -580,17 +731,21 @@ export const RsvpModal: React.FC<RsvpModalProps> = ({
                 onClick={handleReset}
                 className="text-xs text-slate-300 hover:text-white transition-colors cursor-pointer"
               >
-                Configure Another Plaque
+                Configure Another Pass
               </button>
 
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => {
                     const summary = [
-                      'ELON MUSK · VIP GREET & MEET PLAQUE PASS',
+                      'ELON MUSK · VIP GREET & MEET PASS / FAN CARD',
                       '=========================================',
                       `Ticket ID: ${ticketId}`,
-                      `Tier: ${currentTier.name} ($${currentTier.price.toLocaleString()} USD)`,
+                      `Tier: ${currentTier.name} (${
+                        currentTier.originalPrice
+                          ? `$${currentTier.originalPrice.toLocaleString()} down to $${currentTier.price.toLocaleString()}`
+                          : `$${currentTier.price.toLocaleString()}`
+                      } USD)`,
                       `Issued To: ${name.toUpperCase()}`,
                       `Organization: ${organization || 'INDEPENDENT DELEGATE'}`,
                       `Email: ${email}`,

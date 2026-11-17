@@ -7,6 +7,7 @@ import {
   RotateCw
 } from 'lucide-react';
 import { GalleryImageData, GalleryFilter, PageId } from '../types';
+import { handleImageFallback, normalizePhotoSrc } from '../utils/photoHelper';
 
 interface GallerySectionProps {
   gallery: GalleryImageData[];
@@ -147,7 +148,7 @@ export const GallerySection: React.FC<GallerySectionProps> = ({
           </div>
 
           {/* Search Input */}
-          <div className="relative min-w-[260px] md:max-w-xs">
+          <div className="relative w-full md:w-72">
             <Search className="w-4 h-4 text-blue-300/70 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -197,13 +198,15 @@ export const GallerySection: React.FC<GallerySectionProps> = ({
                   {/* Photo Container */}
                   <div
                     onClick={() => onOpenLightbox(originalIndex)}
-                    className="relative aspect-[4/3] bg-[#040a18] overflow-hidden cursor-pointer"
+                    className="relative w-full aspect-[4/3] min-h-[200px] bg-[#040a18] overflow-hidden cursor-pointer"
                   >
                     <img
-                      src={item.image}
+                      src={normalizePhotoSrc(item.image)}
                       alt={item.title}
-                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                      loading="lazy"
+                      className="w-full h-full object-cover object-[center_20%] group-hover:scale-105 transition-transform duration-500"
+                      loading="eager"
+                      decoding="async"
+                      onError={(e) => handleImageFallback(e)}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#040a18]/85 via-transparent to-blue-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <div className="px-3.5 py-1.5 rounded-lg bg-[#040a18]/90 backdrop-blur-md border border-blue-400/40 text-xs font-semibold text-white flex items-center gap-2 transform translate-y-2 group-hover:translate-y-0 transition-transform font-mono">
