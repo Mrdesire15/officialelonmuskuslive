@@ -23,6 +23,7 @@ import {
 import { ChatMessage, NotificationItem, TeslaVehicle, VipPassRequest } from '../types';
 import { TESLA_VEHICLES } from '../data/teslaVehicles';
 import { dispatchAppNotification } from '../utils/deviceNotifications';
+import { handleImageFallback, normalizePhotoSrc } from '../utils/photoHelper';
 
 interface ExecutiveChatWidgetProps {
   onOpenVipModal: () => void;
@@ -436,8 +437,11 @@ export const ExecutiveChatWidget: React.FC<ExecutiveChatWidgetProps> = ({
             <div className="flex items-center gap-2.5">
               <div className="relative">
                 <img
-                  src="/assets/aistudio/elo_e882ff2e.webp"
+                  src={normalizePhotoSrc('/assets/aistudio/elo_e882ff2e.webp')}
                   alt="Elon Musk Executive Desk"
+                  loading="eager"
+                  decoding="async"
+                  onError={(e) => handleImageFallback(e)}
                   className="w-10 h-10 rounded-full object-cover border-2 border-blue-400/80 shadow"
                 />
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-[#061024]" />

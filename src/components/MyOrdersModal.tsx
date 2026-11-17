@@ -261,6 +261,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
   const [chartGrouping, setChartGrouping] = useState<'monthly' | 'daily'>('monthly');
   const [chartMetric, setChartMetric] = useState<'count' | 'spend'>('count');
   const [focusedModel, setFocusedModel] = useState<VehicleModelCategory | 'all'>('all');
+  const [confirmCancelOrderId, setConfirmCancelOrderId] = useState<string | null>(null);
 
   const handleTrackingUrlSubmit = (order: TeslaOrder) => {
     const raw = (trackingUrlDrafts[order.orderId] ?? order.externalTrackingUrl ?? '').trim();
@@ -1312,15 +1313,38 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                                 Payment Verification Needed
                               </span>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => onCancelOrder(order.orderId)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-blue-950/60 transition-colors cursor-pointer"
-                              title="Cancel reservation & refund deposit"
-                              aria-label={`Cancel order ${order.orderId}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {confirmCancelOrderId === order.orderId ? (
+                              <div className="flex items-center gap-1.5 bg-red-950/70 border border-red-500/50 rounded-lg px-2 py-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onCancelOrder(order.orderId);
+                                    setConfirmCancelOrderId(null);
+                                  }}
+                                  className="text-[11px] font-bold text-red-200 hover:text-white cursor-pointer whitespace-nowrap"
+                                >
+                                  Confirm Cancel
+                                </button>
+                                <span className="text-red-500/50">|</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmCancelOrderId(null)}
+                                  className="text-[11px] text-slate-300 hover:text-white cursor-pointer whitespace-nowrap"
+                                >
+                                  Keep
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmCancelOrderId(order.orderId)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-blue-950/60 transition-colors cursor-pointer"
+                                title="Cancel reservation & refund deposit"
+                                aria-label={`Cancel order ${order.orderId}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </div>
 

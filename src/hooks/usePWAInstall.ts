@@ -5,10 +5,14 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 }
 
+export type BrowserHint = 'ios' | 'chromium' | 'safari-mac' | 'firefox' | 'other';
+
 export function usePWAInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [browserHint, setBrowserHint] = useState<BrowserHint>('other');
+  const [inIframe, setInIframe] = useState(false);
 
   useEffect(() => {
     const isStandalone =
@@ -16,9 +20,29 @@ export function usePWAInstall() {
       (window.navigator as unknown as { standalone?: boolean }).standalone === true;
     setIsInstalled(isStandalone);
 
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
+    try {
+      setInIframe(window.self !== window.top);
+    } catch {
+      setInIframe(true);
+    }
+
+    const ua = window.navigator.userAgent.toLowerCase();
+    const isIOSDevice =
+      /iphone|ipad|ipod/.test(ua) ||
+      (ua.includes('macintosh') && 'ontouchend' in document);
     setIsIOS(isIOSDevice);
+
+    if (isIOSDevice) {
+      setBrowserHint('ios');
+    } else if (/edg\/|chrome|crios|chromium|opr\/|samsungbrowser/.test(ua) && !ua.includes('firefox')) {
+      setBrowserHint('chromium');
+    } else if (ua.includes('firefox') || ua.includes('fxios')) {
+      setBrowserHint('firefox');
+    } else if (ua.includes('safari') && ua.includes('macintosh')) {
+      setBrowserHint('safari-mac');
+    } else {
+      setBrowserHint('other');
+    }
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -55,6 +79,29 @@ export function usePWAInstall() {
     isInstallable: !!deferredPrompt,
     isInstalled,
     isIOS,
+    browserHint,
+    inIframe,
     install,
   };
+}
+
+export function useOnlineStatus() {
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  return isOnline;
 }

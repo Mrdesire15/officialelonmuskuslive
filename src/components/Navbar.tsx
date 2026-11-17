@@ -386,6 +386,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               )}
 
+              <PWAInstallButton compact />
+
             </div>
 
           </div>

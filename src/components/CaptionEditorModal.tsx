@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check, Sparkles, Image, RefreshCw, Eye } from 'lucide-react';
 import { GalleryImageData } from '../types';
+import { handleImageFallback, normalizePhotoSrc } from '../utils/photoHelper';
 
 interface CaptionEditorModalProps {
   isOpen: boolean;
@@ -90,8 +91,11 @@ export const CaptionEditorModal: React.FC<CaptionEditorModalProps> = ({
           {/* Thumbnail preview bar */}
           <div className="flex items-center gap-4 p-3 rounded-xl bg-[#08142b] border border-blue-900/60">
             <img
-              src={formData.image}
+              src={normalizePhotoSrc(formData.image)}
               alt={formData.title}
+              loading="eager"
+              decoding="async"
+              onError={(e) => handleImageFallback(e)}
               className="w-16 h-16 object-cover rounded-lg shrink-0 border border-blue-800/70"
             />
             <div className="min-w-0 flex-1">

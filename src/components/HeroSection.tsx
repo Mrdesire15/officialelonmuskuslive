@@ -14,6 +14,7 @@ import { ProfileData, PageId, GalleryImageData } from '../types';
 import { FAMOUS_QUOTES } from '../data/initialData';
 import { VipTier } from './RsvpModal';
 import { handleImageFallback, normalizePhotoSrc } from '../utils/photoHelper';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeroSectionProps {
   profile: ProfileData;
@@ -273,6 +274,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 <span>Next: 02 · Frontier Ventures</span>
                 <ArrowRight className="w-4 h-4 text-red-400" />
               </button>
+
+              <PWAInstallButton />
             </div>
           </div>
 

@@ -16,6 +16,7 @@ import {
   Code
 } from 'lucide-react';
 import { ProfileData, CompanyData, FlyingCarSpecData, GalleryImageData } from '../types';
+import { handleImageFallback, normalizePhotoSrc } from '../utils/photoHelper';
 
 interface ContentStudioModalProps {
   isOpen: boolean;
@@ -53,6 +54,7 @@ export const ContentStudioModal: React.FC<ContentStudioModalProps> = ({
   const [activeTab, setActiveTab] = useState<StudioTab>('gallery');
   const [profileForm, setProfileForm] = useState<ProfileData>(profile);
   const [notification, setNotification] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   if (!isOpen) return null;
 
@@ -69,7 +71,7 @@ export const ContentStudioModal: React.FC<ContentStudioModalProps> = ({
 
   const handleDeleteGalleryItem = (id: string) => {
     if (gallery.length <= 1) {
-      alert('Keep at least one gallery item');
+      showNotification('Keep at least one gallery item');
       return;
     }
     const updated = gallery.filter((g) => g.id !== id);
@@ -208,14 +210,39 @@ export const ContentStudioModal: React.FC<ContentStudioModalProps> = ({
               <Download className="w-3.5 h-3.5" />
               <span>Export</span>
             </button>
-            <button
-              onClick={onResetAll}
-              className="p-1.5 rounded-lg border border-blue-800/80 bg-[#08142b] hover:border-red-400/70 text-slate-300 hover:text-red-300 transition-colors cursor-pointer text-xs flex items-center gap-1 px-2.5"
-              title="Reset everything to initial defaults"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset</span>
-            </button>
+            {confirmReset ? (
+              <div className="flex items-center gap-1.5 rounded-lg border border-red-500/60 bg-red-950/60 px-2.5 py-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onResetAll();
+                    setConfirmReset(false);
+                    showNotification('Content restored to defaults');
+                  }}
+                  className="font-bold text-red-200 hover:text-white cursor-pointer"
+                >
+                  Confirm Reset
+                </button>
+                <span className="text-red-500/50">|</span>
+                <button
+                  type="button"
+                  onClick={() => setConfirmReset(false)}
+                  className="text-slate-300 hover:text-white cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmReset(true)}
+                className="p-1.5 rounded-lg border border-blue-800/80 bg-[#08142b] hover:border-red-400/70 text-slate-300 hover:text-red-300 transition-colors cursor-pointer text-xs flex items-center gap-1 px-2.5"
+                title="Reset everything to initial defaults"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -257,8 +284,11 @@ export const ContentStudioModal: React.FC<ContentStudioModalProps> = ({
                         {index + 1}
                       </span>
                       <img
-                        src={item.image}
+                        src={normalizePhotoSrc(item.image)}
                         alt={item.title}
+                        loading="eager"
+                        decoding="async"
+                        onError={(e) => handleImageFallback(e)}
                         className="w-14 h-14 object-cover rounded-lg shrink-0 border border-blue-800/70"
                       />
                       <div className="min-w-0">

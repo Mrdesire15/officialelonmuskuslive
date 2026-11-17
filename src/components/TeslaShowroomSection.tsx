@@ -977,9 +977,12 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
 
                     <div className="flex items-center gap-3 pt-1">
                       <img
-                        src={compareVehicleA.image}
+                        src={normalizePhotoSrc(compareVehicleA.image)}
                         alt={compareVehicleA.name}
+                        loading="eager"
+                        decoding="async"
                         referrerPolicy="no-referrer"
+                        onError={(e) => handleImageFallback(e)}
                         className="w-20 h-14 rounded-lg object-cover border border-blue-900/60 shrink-0"
                       />
                       <div className="flex-1 min-w-0">
@@ -1033,9 +1036,12 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
 
                     <div className="flex items-center gap-3 pt-1">
                       <img
-                        src={compareVehicleB.image}
+                        src={normalizePhotoSrc(compareVehicleB.image)}
                         alt={compareVehicleB.name}
+                        loading="eager"
+                        decoding="async"
                         referrerPolicy="no-referrer"
+                        onError={(e) => handleImageFallback(e)}
                         className="w-20 h-14 rounded-lg object-cover border border-red-900/60 shrink-0"
                       />
                       <div className="flex-1 min-w-0">

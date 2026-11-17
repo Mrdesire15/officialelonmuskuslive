@@ -60,6 +60,7 @@ import { NotificationSettingsModal } from './components/NotificationSettingsModa
 import { MemberAuthModal } from './components/MemberAuthModal';
 import { SiteLockoutScreen } from './components/SiteLockoutScreen';
 import { Footer } from './components/Footer';
+import { OfflineIndicator } from './components/PWAInstallButton';
 import { handleImageFallback, normalizePhotoSrc } from './utils/photoHelper';
 import {
   MemberAccountSnapshot,
@@ -833,10 +834,10 @@ export default function App() {
   };
 
   const handleResetGallery = () => {
-    if (window.confirm('Reset all gallery captions and photos back to initial defaults?')) {
-      setGallery(INITIAL_GALLERY);
+    setGallery(INITIAL_GALLERY);
+    try {
       localStorage.removeItem(STORAGE_KEYS.GALLERY);
-    }
+    } catch {}
   };
 
   // Page navigation handlers
@@ -1001,9 +1002,7 @@ export default function App() {
   };
 
   const handleCancelOrder = (orderId: string) => {
-    if (window.confirm('Cancel this vehicle reservation and process refund?')) {
-      setOrders((prev) => prev.filter((o) => o.orderId !== orderId));
-    }
+    setOrders((prev) => prev.filter((o) => o.orderId !== orderId));
   };
 
   // Payment approval actions directed to admin
@@ -1960,15 +1959,15 @@ export default function App() {
   };
 
   const handleResetAll = () => {
-    if (window.confirm('Reset all models (Profile, Companies, Specs, and Gallery) back to original state?')) {
-      setProfile(INITIAL_PROFILE);
-      setCompanies(INITIAL_COMPANIES);
-      setSpecs(INITIAL_FLYING_CAR_SPECS);
-      setGallery(INITIAL_GALLERY);
-      setCustomCars([]);
-      setInboxMessages(INITIAL_INBOX_MESSAGES);
+    setProfile(INITIAL_PROFILE);
+    setCompanies(INITIAL_COMPANIES);
+    setSpecs(INITIAL_FLYING_CAR_SPECS);
+    setGallery(INITIAL_GALLERY);
+    setCustomCars([]);
+    setInboxMessages(INITIAL_INBOX_MESSAGES);
+    try {
       localStorage.clear();
-    }
+    } catch {}
   };
 
   const unreadInboxCount = inboxMessages.filter((m) => !m.read).length;
@@ -2311,7 +2310,7 @@ export default function App() {
 
       {/* Footer */}
       <Footer
-        onOpenRsvp={() => setIsRsvpOpen(true)}
+        onOpenRsvp={() => handleOpenRsvp('christmas-fan-card')}
         onSelectPage={handleSelectPage}
         onOpenCharity={() => setIsCharityOpen(true)}
         onOpenAuthModal={handleOpenAuthModal}
@@ -2629,9 +2628,11 @@ export default function App() {
         </div>
       )}
 
+      <OfflineIndicator />
+
       {/* Floating Notification-Based Executive Chat Widget */}
       <ExecutiveChatWidget
-        onOpenVipModal={() => setIsRsvpOpen(true)}
+        onOpenVipModal={() => handleOpenRsvp('christmas-fan-card')}
         onOpenTeslaOrderModal={(v) => setOrderingVehicle(v || allVehicles[0])}
         onAddOrderDirect={handleOrderCompleted}
         onSubmitVipRequest={handleSubmitVipRequest}

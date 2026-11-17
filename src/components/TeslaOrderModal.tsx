@@ -26,6 +26,7 @@ import {
   PaymentAccountRequest,
 } from '../types';
 import { getVehicleDetailedSpecs } from '../data/teslaVehicles';
+import { handleImageFallback, normalizePhotoSrc } from '../utils/photoHelper';
 
 interface TeslaOrderModalProps {
   isOpen: boolean;
@@ -331,10 +332,13 @@ const TeslaOrderModalInner: React.FC<{
             
             {/* Left Preview & Specs */}
             <div className="lg:col-span-5 space-y-5">
-              <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-[#08142b] border border-blue-900/60 shadow-lg group">
+              <div className="relative aspect-[16/10] min-h-[180px] rounded-xl overflow-hidden bg-[#08142b] border border-blue-900/60 shadow-lg group">
                 <img
-                  src={vehicle.image}
+                  src={normalizePhotoSrc(vehicle.image)}
                   alt={vehicle.name}
+                  loading="eager"
+                  decoding="async"
+                  onError={(e) => handleImageFallback(e)}
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#040a18]/85 via-transparent to-transparent" />
