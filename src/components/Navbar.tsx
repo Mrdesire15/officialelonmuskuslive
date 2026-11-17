@@ -22,9 +22,12 @@ import {
   HeartHandshake,
   Bell,
   BellRing,
+  UserPlus,
+  UserCheck,
 } from 'lucide-react';
 import { PageId, PageDefinition } from '../types';
 import { PAGES_CONFIG } from '../data/pagesData';
+import { MemberAccountSnapshot } from '../utils/memberAuth';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface NavbarProps {
@@ -48,6 +51,8 @@ interface NavbarProps {
   onOpenNotificationSettings?: () => void;
   phoneNotificationsReady?: boolean;
   soundEnabled?: boolean;
+  currentUser?: MemberAccountSnapshot | null;
+  onOpenAuthModal?: (initialTab?: 'register' | 'signin') => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -71,6 +76,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenNotificationSettings,
   phoneNotificationsReady = false,
   soundEnabled = true,
+  currentUser = null,
+  onOpenAuthModal,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const logoTapCountRef = useRef(0);
@@ -135,25 +142,25 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Subtle 2px American Tri-Color Hairline */}
       <div className="h-[2px] w-full us-flag-strip" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8">
         
         {/* Single Consolidated Navigation Bar */}
-        <div className="h-20 flex items-center justify-between gap-4">
+        <div className="h-16 sm:h-20 flex items-center justify-between gap-1.5 sm:gap-4">
           
           {/* Left: Brand Identity */}
           <button
             onClick={handleLogoTap}
-            className="flex items-center gap-3 group text-left cursor-pointer shrink-0 select-none"
+            className="flex items-center gap-2 sm:gap-3 group text-left cursor-pointer shrink-0 select-none"
             title="Return to Chapter 01 · Executive Dossier"
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-blue-700 to-red-600 border border-white/25 flex items-center justify-center text-white font-display font-black text-xl shadow-md shadow-blue-600/25 group-hover:scale-105 transition-transform">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-gradient-to-br from-blue-600 via-blue-700 to-red-600 border border-white/25 flex items-center justify-center text-white font-display font-black text-base sm:text-xl shadow-md shadow-blue-600/25 group-hover:scale-105 transition-transform shrink-0">
               X
             </div>
-            <div className="flex flex-col">
-              <span className="font-display font-black text-base tracking-wider text-white group-hover:text-blue-300 transition-colors whitespace-nowrap">
+            <div className="flex flex-col min-w-0">
+              <span className="font-display font-black text-xs sm:text-base tracking-normal sm:tracking-wider text-white group-hover:text-blue-300 transition-colors whitespace-nowrap">
                 ELON MUSK
               </span>
-              <span className="text-[10px] font-mono tracking-wider text-blue-300/90 whitespace-nowrap">
+              <span className="hidden min-[430px]:block text-[9px] sm:text-[10px] font-mono tracking-normal sm:tracking-wider text-blue-300/90 whitespace-nowrap">
                 Executive Command · USA
               </span>
             </div>
@@ -339,16 +346,56 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               )}
 
+              {/* Executive Member Registration / Account Key */}
+              {onOpenAuthModal && (
+                <button
+                  type="button"
+                  onClick={() => onOpenAuthModal('signin')}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer shadow-sm whitespace-nowrap shrink-0 ${
+                    currentUser
+                      ? 'bg-[#08152e] border-emerald-500/45 text-emerald-200 hover:border-emerald-400 hover:text-white'
+                      : 'bg-[#08152e] border-blue-500/50 text-blue-100 hover:bg-blue-600/25 hover:border-blue-400 hover:text-white'
+                  }`}
+                  title={
+                    currentUser
+                      ? `Signed in as ${currentUser.email || 'Member'} (${
+                          currentUser.emailVerified ? 'Verified' : 'Verification Pending'
+                        })`
+                      : 'Register or Sign In with Email'
+                  }
+                >
+                  {currentUser ? (
+                    <>
+                      <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="max-w-[110px] truncate">
+                        {currentUser.displayName?.split(' ')[0] || 'Member'}
+                      </span>
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          currentUser.emailVerified ? 'bg-emerald-400' : 'bg-amber-400'
+                        }`}
+                        aria-hidden="true"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-3.5 h-3.5 text-blue-300" />
+                      <span>Sign In</span>
+                    </>
+                  )}
+                </button>
+              )}
+
             </div>
 
           </div>
 
           {/* Mobile Compact Actions + Menu Button */}
-          <div className="flex lg:hidden items-center gap-2 ml-auto">
+          <div className="flex lg:hidden items-center gap-1 sm:gap-2 ml-auto shrink-0">
             {onOpenNotificationSettings && (
               <button
                 onClick={onOpenNotificationSettings}
-                className={`relative p-2 rounded-xl border cursor-pointer shrink-0 ${
+                className={`relative p-1.5 sm:p-2 rounded-lg sm:rounded-xl border cursor-pointer shrink-0 ${
                   phoneNotificationsReady
                     ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-200'
                     : 'bg-[#08152e] border-blue-800/70 text-blue-200'
@@ -357,9 +404,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 title="Phone Notifications & Sound"
               >
                 {phoneNotificationsReady ? (
-                  <BellRing className="w-4 h-4 text-emerald-300" />
+                  <BellRing className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-300" />
                 ) : (
-                  <Bell className="w-4 h-4 text-blue-300" />
+                  <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-300" />
                 )}
                 {!phoneNotificationsReady && (
                   <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500" aria-hidden="true" />
@@ -369,30 +416,58 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={onOpenInbox}
-              className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-bold rounded-xl bg-blue-600/25 border border-blue-500/50 text-blue-100 cursor-pointer whitespace-nowrap shrink-0"
+              className="flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl bg-blue-600/25 border border-blue-500/50 text-blue-100 cursor-pointer whitespace-nowrap shrink-0"
               aria-label="Open Inbox"
             >
-              <Mail className="w-4 h-4 text-blue-300" />
+              <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-300" />
               {inboxUnreadCount > 0 && (
-                <span className="px-1.5 rounded-full text-[10px] font-mono font-bold bg-red-600 text-white tabular-nums">
+                <span className="px-1 sm:px-1.5 rounded-full text-[9px] sm:text-[10px] font-mono font-bold bg-red-600 text-white tabular-nums">
                   {inboxUnreadCount}
                 </span>
               )}
             </button>
 
+            {onOpenAuthModal && (
+              <button
+                type="button"
+                onClick={() => onOpenAuthModal('signin')}
+                className={`relative flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl border cursor-pointer shrink-0 whitespace-nowrap ${
+                  currentUser
+                    ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-200'
+                    : 'bg-[#08152e] border-blue-800/70 text-blue-100'
+                }`}
+                aria-label={currentUser ? 'Open Member Account' : 'Sign In with Email and Password'}
+                title={currentUser ? 'Member Account' : 'Sign In with Email & Password'}
+              >
+                {currentUser ? (
+                  <>
+                    <UserCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-300" />
+                    <span className="max-w-[50px] sm:max-w-[72px] truncate">
+                      {currentUser.displayName?.split(' ')[0] || 'Member'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="hidden min-[400px]:inline-block w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-300" />
+                    <span>Sign In</span>
+                  </>
+                )}
+              </button>
+            )}
+
             <button
               onClick={onOpenRsvp}
-              className="px-3 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-blue-600 to-red-600 text-white border border-white/20 cursor-pointer whitespace-nowrap shrink-0"
+              className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl bg-gradient-to-r from-blue-600 to-red-600 text-white border border-white/20 cursor-pointer whitespace-nowrap shrink-0"
             >
               VIP Pass
             </button>
 
             <button
               onClick={() => setMobileMenuOpen((prev) => !prev)}
-              className="p-2 rounded-xl bg-[#08152e] border border-blue-800/60 text-white cursor-pointer"
+              className="p-1.5 sm:p-2 -ml-0.5 sm:ml-0 rounded-lg sm:rounded-xl bg-[#08152e] border border-blue-800/60 text-white cursor-pointer shrink-0 flex items-center justify-center"
               aria-label="Toggle Navigation Menu"
             >
-              {mobileMenuOpen ? <CloseIcon className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {mobileMenuOpen ? <CloseIcon className="w-4 h-4 sm:w-5 sm:h-5" /> : <Menu className="w-4 h-4 sm:w-5 sm:h-5" />}
             </button>
           </div>
 
@@ -480,6 +555,34 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <BellRing className="w-3.5 h-3.5 text-blue-300" />
                 <span>Phone Notifications &amp; App Sound</span>
+              </button>
+            )}
+            {onOpenAuthModal && (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenAuthModal('signin');
+                  setMobileMenuOpen(false);
+                }}
+                className={`py-2.5 px-3 rounded-xl border text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 ${
+                  currentUser
+                    ? 'bg-emerald-500/15 border-emerald-500/45 text-emerald-200'
+                    : 'bg-blue-600/20 border-blue-500/50 text-blue-100'
+                }`}
+              >
+                {currentUser ? (
+                  <>
+                    <UserCheck className="w-3.5 h-3.5 text-emerald-300" />
+                    <span className="truncate">
+                      Member Account ({currentUser.email || currentUser.displayName || 'Active'})
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="w-3.5 h-3.5 text-blue-300" />
+                    <span>Member Registration &amp; Sign In</span>
+                  </>
+                )}
               </button>
             )}
             <PWAInstallButton className="w-full py-2.5" />

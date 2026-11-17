@@ -1,6 +1,6 @@
 import React from 'react';
 import { ShieldAlert, Lock, Clock } from 'lucide-react';
-import { formatLockoutCountdown } from '../utils/securityLockout';
+import { formatLockoutCountdown, LOCKOUT_DURATION_MINUTES } from '../utils/securityLockout';
 
 interface SiteLockoutScreenProps {
   remainingMs: number;
@@ -34,7 +34,7 @@ export const SiteLockoutScreen: React.FC<SiteLockoutScreenProps> = ({ remainingM
               Access Temporarily Locked
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Three consecutive incorrect password attempts were detected. To protect member accounts and prevent unauthorized access, site access is locked for 5 minutes.
+              Three consecutive incorrect password attempts were detected. To protect member accounts and prevent unauthorized access, site access is locked for {LOCKOUT_DURATION_MINUTES} minutes.
             </p>
           </div>
 

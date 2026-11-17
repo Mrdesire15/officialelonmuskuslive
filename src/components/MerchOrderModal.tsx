@@ -44,6 +44,8 @@ interface MerchOrderModalProps {
     requestCategory?: 'vehicle' | 'merch' | 'charity_donation' | 'charity_support';
   }) => PaymentAccountRequest;
   onOpenInbox?: () => void;
+  defaultCustomerName?: string;
+  defaultCustomerEmail?: string;
 }
 
 export const MerchOrderModal: React.FC<MerchOrderModalProps> = ({
@@ -59,6 +61,8 @@ export const MerchOrderModal: React.FC<MerchOrderModalProps> = ({
   paymentAccountRequests = [],
   onRequestPaymentAccount,
   onOpenInbox,
+  defaultCustomerName = '',
+  defaultCustomerEmail = '',
 }) => {
   if (!isOpen || !product) return null;
 
@@ -76,6 +80,8 @@ export const MerchOrderModal: React.FC<MerchOrderModalProps> = ({
       paymentAccountRequests={paymentAccountRequests}
       onRequestPaymentAccount={onRequestPaymentAccount}
       onOpenInbox={onOpenInbox}
+      defaultCustomerName={defaultCustomerName}
+      defaultCustomerEmail={defaultCustomerEmail}
     />
   );
 };
@@ -100,6 +106,8 @@ const MerchOrderModalInner: React.FC<{
     requestCategory?: 'vehicle' | 'merch' | 'charity_donation' | 'charity_support';
   }) => PaymentAccountRequest;
   onOpenInbox?: () => void;
+  defaultCustomerName: string;
+  defaultCustomerEmail: string;
 }> = ({
   product,
   initialTierId,
@@ -112,6 +120,8 @@ const MerchOrderModalInner: React.FC<{
   paymentAccountRequests,
   onRequestPaymentAccount,
   onOpenInbox,
+  defaultCustomerName,
+  defaultCustomerEmail,
 }) => {
   const defaultTier =
     product.qualityTiers.find((t) => t.id === initialTierId) || product.qualityTiers[0];
@@ -123,8 +133,8 @@ const MerchOrderModalInner: React.FC<{
   const [imgError, setImgError] = useState<boolean>(false);
 
   const [step, setStep] = useState<'configure' | 'checkout' | 'confirmed'>('configure');
-  const [customerName, setCustomerName] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerName, setCustomerName] = useState(defaultCustomerName);
+  const [customerEmail, setCustomerEmail] = useState(defaultCustomerEmail);
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [city, setCity] = useState('');

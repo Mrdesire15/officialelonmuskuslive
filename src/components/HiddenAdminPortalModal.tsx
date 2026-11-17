@@ -49,6 +49,7 @@ import {
   getLockoutStatus,
   recordFailedAttempt,
   verifyAdminPasscode,
+  LOCKOUT_DURATION_MINUTES,
 } from '../utils/securityLockout';
 
 interface HiddenAdminPortalModalProps {
@@ -201,7 +202,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
       }
       const attemptsWord = status.remainingAttempts === 1 ? 'attempt' : 'attempts';
       setPasscodeError(
-        `Incorrect executive passcode. Access denied. (${status.remainingAttempts} ${attemptsWord} remaining before a 5-minute site lockout.)`
+        `Incorrect executive passcode. Access denied. (${status.remainingAttempts} ${attemptsWord} remaining before a ${LOCKOUT_DURATION_MINUTES}-minute site lockout.)`
       );
     }
   };

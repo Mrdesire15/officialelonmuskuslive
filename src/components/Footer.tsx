@@ -6,12 +6,16 @@ interface FooterProps {
   onOpenRsvp: () => void;
   onSelectPage?: (page: PageId) => void;
   onOpenCharity?: () => void;
+  onOpenAuthModal?: (initialTab?: 'register' | 'signin') => void;
+  isMemberSignedIn?: boolean;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onOpenRsvp,
   onSelectPage,
   onOpenCharity,
+  onOpenAuthModal,
+  isMemberSignedIn = false,
 }) => {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -75,6 +79,15 @@ export const Footer: React.FC<FooterProps> = ({
                   className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 text-rose-200 border border-rose-500/45 text-xs transition-colors cursor-pointer"
                 >
                   Charity NGO &amp; Relief
+                </button>
+              )}
+              {onOpenAuthModal && (
+                <button
+                  type="button"
+                  onClick={() => onOpenAuthModal('signin')}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/35 text-blue-200 border border-blue-500/45 text-xs transition-colors cursor-pointer"
+                >
+                  {isMemberSignedIn ? 'Member Account' : 'Member Sign In'}
                 </button>
               )}
               <button

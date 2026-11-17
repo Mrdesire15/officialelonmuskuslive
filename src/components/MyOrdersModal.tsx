@@ -8,13 +8,8 @@ import {
   Clock,
   MapPin,
   Trash2,
-  Factory,
-  Cog,
-  ClipboardCheck,
   Truck,
-  KeyRound,
   Check,
-  ChevronRight,
   ChevronDown,
   ChevronUp,
   AlertTriangle,
@@ -38,6 +33,12 @@ import {
   Tooltip,
 } from 'recharts';
 import { OrderTrackingEvent, TeslaOrder } from '../types';
+import {
+  ShipmentTracking,
+  SHIPMENT_STAGES,
+  getOrderStageIndex,
+  sanitizeExternalUrl,
+} from './ShipmentTracking';
 
 interface MyOrdersModalProps {
   isOpen: boolean;
@@ -49,91 +50,6 @@ interface MyOrdersModalProps {
   isAdmin?: boolean;
   onOrderNewCar: () => void;
   onOpenInbox?: () => void;
-}
-
-interface JourneyStage {
-  id: 'production' | 'assembly' | 'inspection' | 'transit' | 'delivery';
-  shortLabel: string;
-  title: string;
-  statusValue: TeslaOrder['status'];
-  facility: string;
-  description: (order: TeslaOrder) => string;
-  icon: React.ComponentType<{ className?: string }>;
-}
-
-const ORDER_JOURNEY_STAGES: JourneyStage[] = [
-  {
-    id: 'production',
-    shortLabel: 'Production',
-    title: 'Production Queue & VIN Stamping',
-    statusValue: 'Production Scheduled',
-    facility: 'Gigafactory Texas · Chassis & Casting',
-    description: (order) =>
-      `Chassis VIN ${order.reservationVin} assigned to factory stamping press and structural battery cell allocation.`,
-    icon: Factory,
-  },
-  {
-    id: 'assembly',
-    shortLabel: 'Assembly',
-    title: 'Factory Assembly & Paint Shop',
-    statusValue: 'Factory Assembly',
-    facility: 'General Assembly Line · Automated Robotics',
-    description: (order) =>
-      `Drive unit installation, ${order.selectedColor.name} multi-coat exterior finish, ${order.selectedWheels.name}, and ${order.selectedInterior.name} cabin assembly.`,
-    icon: Cog,
-  },
-  {
-    id: 'inspection',
-    shortLabel: 'Quality Check',
-    title: 'End-of-Line Telemetry & ADAS Calibration',
-    statusValue: 'Quality Inspection',
-    facility: 'Gigafactory Quality & Dyno Bay',
-    description: () =>
-      'High-voltage pack isolation verification, ultrasonic panel gap audit, HW4 camera calibration, and rolling dyno test.',
-    icon: ClipboardCheck,
-  },
-  {
-    id: 'transit',
-    shortLabel: 'In Transit',
-    title: 'Insured Carrier Transit',
-    statusValue: 'In Transit',
-    facility: 'Tesla Logistics Dispatch Network',
-    description: (order) =>
-      `Loaded onto enclosed auto carrier en route to ${order.deliveryAddress || order.city || 'your Tesla Delivery Hub'}.`,
-    icon: Truck,
-  },
-  {
-    id: 'delivery',
-    shortLabel: 'Delivery',
-    title: 'Final Handover & Delivery',
-    statusValue: 'Delivered',
-    facility: 'Tesla Delivery Center Handover Bay',
-    description: (order) =>
-      `Final detail complete at ${order.city || 'Tesla Delivery Center'}. Digital key-card pairing and owner handover unlocked.`,
-    icon: KeyRound,
-  },
-];
-
-function getOrderStageIndex(order: TeslaOrder): number {
-  switch (order.status) {
-    case 'Delivered':
-    case 'Ready for Delivery':
-      return 4;
-    case 'In Transit':
-      return 3;
-    case 'Quality Inspection':
-      return 2;
-    case 'Factory Assembly':
-    case 'Payment Approved & VIN Allocated':
-      return 1;
-    case 'Production Scheduled':
-    case 'Reservation Confirmed':
-    case 'Pending Elon Musk Management Approval':
-    case 'Pending Admin Payment Approval':
-    case 'Payment Verification Needed':
-    default:
-      return 0;
-  }
 }
 
 type VehicleModelCategory =
@@ -199,22 +115,6 @@ function getOrderDeliveryDateLabel(order: TeslaOrder): string {
     }
   }
   return order.orderDate || order.estimatedDelivery;
-}
-
-function sanitizeExternalUrl(raw?: string): string | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  try {
-    const parsed = new URL(withProtocol);
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-      return parsed.href;
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 function getOrderTrackingHistory(order: TeslaOrder): OrderTrackingEvent[] {
@@ -350,10 +250,11 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
 }) => {
   const [inspectedStepByOrder, setInspectedStepByOrder] = useState<Record<string, number>>({});
   const [expandedHistoryByOrder, setExpandedHistoryByOrder] = useState<Record<string, boolean>>({});
+  const [expandedShipmentByOrder, setExpandedShipmentByOrder] = useState<Record<string, boolean>>({});
   const [trackingUrlDrafts, setTrackingUrlDrafts] = useState<Record<string, string>>({});
   const [trackingUrlErrors, setTrackingUrlErrors] = useState<Record<string, string>>({});
   const [copiedTrackingEventId, setCopiedTrackingEventId] = useState<string | null>(null);
-  const [ordersViewTab, setOrdersViewTab] = useState<'all' | 'active' | 'timeline'>('all');
+  const [ordersViewTab, setOrdersViewTab] = useState<'all' | 'active' | 'tracking' | 'timeline'>('all');
   const [downloadedOrderId, setDownloadedOrderId] = useState<string | null>(null);
   const [generatedInvoiceOrderId, setGeneratedInvoiceOrderId] = useState<string | null>(null);
   const [showTrendsChart, setShowTrendsChart] = useState<boolean>(true);
@@ -575,7 +476,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
   if (!isOpen) return null;
 
   const handleDownloadCertificate = (order: TeslaOrder, stageIdx: number) => {
-    const activeStage = ORDER_JOURNEY_STAGES[stageIdx];
+    const activeStage = SHIPMENT_STAGES[stageIdx] || SHIPMENT_STAGES[0];
     const lines = [
       'TESLA EXECUTIVE FLEET — OFFICIAL RESERVATION & BUILD CERTIFICATE',
       '==================================================================',
@@ -1209,7 +1110,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
             </div>
           ) : (
             <div className="space-y-5">
-              {/* View Switcher: All Orders vs Active Builds vs Historical Ownership Timeline */}
+              {/* View Switcher: All Orders vs Active Builds vs Shipment Tracking vs Ownership Timeline */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
                 <div
                   role="tablist"
@@ -1245,6 +1146,20 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                   <button
                     type="button"
                     role="tab"
+                    aria-selected={ordersViewTab === 'tracking'}
+                    onClick={() => setOrdersViewTab('tracking')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                      ordersViewTab === 'tracking'
+                        ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white shadow-sm'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <Truck className="w-3.5 h-3.5" />
+                    <span>Shipment Tracking ({orders.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
                     aria-selected={ordersViewTab === 'timeline'}
                     onClick={() => setOrdersViewTab('timeline')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
@@ -1261,19 +1176,87 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                 <span className="text-[11px] font-mono text-slate-400">
                   {ordersViewTab === 'timeline'
                     ? 'Permanent record of delivered vehicles & milestones'
-                    : 'Click Tracking History on any order to inspect full audit log'}
+                    : ordersViewTab === 'tracking'
+                    ? 'Production, assembly, and delivery stages for every vehicle'
+                    : 'Click any stage in Shipment Tracking to inspect milestone telemetry'}
                 </span>
               </div>
 
-              {/* Active / In-Progress Vehicle Order Cards */}
-              {ordersViewTab !== 'timeline' && (
+              {/* Dedicated Shipment Tracking Timeline View (All Vehicles) */}
+              {ordersViewTab === 'tracking' && (
                 <div className="space-y-4">
-                  {(ordersViewTab === 'active'
-                    ? ownershipAnalytics.activeOrders
-                    : ownershipAnalytics.activeOrders.length > 0
-                    ? ownershipAnalytics.activeOrders
-                    : []
-                  ).map((order) => {
+                  {orders.map((order) => {
+                    const trackingEvents = getOrderTrackingHistory(order);
+                    const isDelivered = isOrderCompleted(order);
+                    const inspectedIdx =
+                      inspectedStepByOrder[order.orderId] !== undefined
+                        ? inspectedStepByOrder[order.orderId]
+                        : getOrderStageIndex(order);
+
+                    return (
+                      <div
+                        key={`tracking-view-${order.orderId}`}
+                        className="p-5 rounded-xl bg-[#08142b] border border-blue-900/60 space-y-4"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-blue-900/50">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2 text-xs font-mono tabular-nums text-blue-300">
+                              <span className="font-bold">{order.orderId}</span>
+                              <span aria-hidden="true" className="text-slate-500">·</span>
+                              <span className="text-slate-300">VIN {order.reservationVin}</span>
+                              <span aria-hidden="true" className="text-slate-500">·</span>
+                              <span className="text-slate-400">{order.orderDate}</span>
+                            </div>
+                            <h4 className="font-display text-lg font-bold text-white mt-0.5">
+                              {order.vehicleName}
+                            </h4>
+                            <div className="text-xs text-slate-300">
+                              {order.itemCategory === 'merch'
+                                ? `${order.merchQualityTier || order.selectedInterior.name} · Size: ${order.merchSize || 'Standard'} · Qty: ${order.merchQuantity || 1}`
+                                : `${order.selectedColor.name} · ${order.selectedWheels.name} · ${order.selectedInterior.name}`}
+                            </div>
+                          </div>
+
+                          <div className="text-xs font-mono shrink-0 sm:text-right">
+                            <div
+                              className={`font-semibold ${
+                                isDelivered
+                                  ? 'text-emerald-300'
+                                  : order.paymentStatus === 'rejected'
+                                  ? 'text-red-300'
+                                  : 'text-blue-300'
+                              }`}
+                            >
+                              {order.status}
+                            </div>
+                            <div className="text-[11px] text-slate-400 tabular-nums">
+                              ${order.totalPrice.toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+
+                        <ShipmentTracking
+                          order={order}
+                          trackingEvents={trackingEvents}
+                          onUpdateOrderStatus={onUpdateOrderStatus}
+                          inspectedStep={inspectedIdx}
+                          onSelectStep={(idx) =>
+                            setInspectedStepByOrder((prev) => ({
+                              ...prev,
+                              [order.orderId]: idx,
+                            }))
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Active / In-Progress Vehicle Order Cards */}
+              {(ordersViewTab === 'all' || ordersViewTab === 'active') && (
+                <div className="space-y-4">
+                  {ownershipAnalytics.activeOrders.map((order) => {
                     const isPending = !order.paymentStatus || order.paymentStatus === 'pending_admin_approval';
                     const isApproved = order.paymentStatus === 'approved';
                     const isRejected = order.paymentStatus === 'rejected';
@@ -1283,15 +1266,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                       inspectedStepByOrder[order.orderId] !== undefined
                         ? inspectedStepByOrder[order.orderId]
                         : currentStageIdx;
-                    const inspectedStage = ORDER_JOURNEY_STAGES[inspectedIdx];
-                    const InspectedIcon = inspectedStage.icon;
-                    const progressPercent = Math.round(((currentStageIdx + 1) / ORDER_JOURNEY_STAGES.length) * 100);
-                    const railWidthPercent = (currentStageIdx / (ORDER_JOURNEY_STAGES.length - 1)) * 100;
-                    const isDelivered = currentStageIdx === ORDER_JOURNEY_STAGES.length - 1;
-                    const nextStage =
-                      currentStageIdx < ORDER_JOURNEY_STAGES.length - 1
-                        ? ORDER_JOURNEY_STAGES[currentStageIdx + 1]
-                        : null;
+                    const isDelivered = currentStageIdx === SHIPMENT_STAGES.length - 1;
                     const trackingEvents = getOrderTrackingHistory(order);
                     const isHistoryExpanded = !!expandedHistoryByOrder[order.orderId];
 
@@ -1349,202 +1324,19 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                           </div>
                         </div>
 
-                        {/* Stylized Production-to-Delivery Step-Progress Tracker Bar */}
-                        <div className="p-4 rounded-xl bg-[#040a18]/90 border border-blue-800/55 space-y-4">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="font-mono font-bold text-blue-300 uppercase tracking-wider">
-                                Production to Delivery Journey
-                              </span>
-                              <span aria-hidden="true" className="text-slate-600">·</span>
-                              <span className="font-mono tabular-nums text-white font-semibold">
-                                Stage {currentStageIdx + 1}/5 ({progressPercent}%)
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              {isApproved && nextStage && onUpdateOrderStatus ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const updatedIdx = currentStageIdx + 1;
-                                    onUpdateOrderStatus(order.orderId, nextStage.statusValue);
-                                    setInspectedStepByOrder((prev) => ({
-                                      ...prev,
-                                      [order.orderId]: updatedIdx,
-                                    }));
-                                  }}
-                                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 text-white text-[11px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0 shadow-sm"
-                                >
-                                  <span>Advance to {nextStage.shortLabel}</span>
-                                  <ChevronRight className="w-3.5 h-3.5" />
-                                </button>
-                              ) : isDelivered ? (
-                                <span className="text-[11px] font-mono font-semibold text-emerald-300 flex items-center gap-1 whitespace-nowrap">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Journey Complete
-                                </span>
-                              ) : (
-                                <span className="text-[11px] text-slate-400 font-mono">
-                                  Select any milestone to inspect details
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Multi-Node Connected Track Rail */}
-                          <div className="relative pt-1 pb-1">
-                            {/* Base Background Rail (positioned vertically centered behind w-9/w-10 nodes) */}
-                            <div
-                              className="absolute top-[22px] sm:top-[24px] left-[10%] right-[10%] h-1.5 rounded-full bg-[#0d1f44] overflow-hidden"
-                              aria-hidden="true"
-                            >
-                              <div
-                                className={`h-full rounded-full transition-all duration-500 ease-out ${
-                                  isDelivered
-                                    ? 'bg-gradient-to-r from-blue-500 via-emerald-400 to-emerald-400'
-                                    : isRejected
-                                    ? 'bg-gradient-to-r from-red-600 to-red-400'
-                                    : 'bg-gradient-to-r from-blue-500 via-indigo-400 to-red-500'
-                                }`}
-                                style={{ width: `${railWidthPercent}%` }}
-                              />
-                            </div>
-
-                            {/* 5 Step Nodes */}
-                            <div className="relative grid grid-cols-5 gap-1 sm:gap-2">
-                              {ORDER_JOURNEY_STAGES.map((stage, idx) => {
-                                const StepIcon = stage.icon;
-                                const isCompleted = idx < currentStageIdx || (isDelivered && idx === currentStageIdx);
-                                const isCurrent = idx === currentStageIdx && !isDelivered;
-                                const isInspected = idx === inspectedIdx;
-
-                                return (
-                                  <button
-                                    key={stage.id}
-                                    type="button"
-                                    onClick={() =>
-                                      setInspectedStepByOrder((prev) => ({
-                                        ...prev,
-                                        [order.orderId]: idx,
-                                      }))
-                                    }
-                                    aria-current={isCurrent || (isDelivered && idx === 4) ? 'step' : undefined}
-                                    aria-label={`${stage.title} milestone`}
-                                    className="group flex flex-col items-center text-center cursor-pointer focus:outline-none"
-                                  >
-                                    <div
-                                      className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center border-2 transition-all duration-200 ${
-                                        isCompleted
-                                          ? 'bg-gradient-to-br from-blue-600 to-emerald-500 border-emerald-300/80 text-white shadow-md shadow-emerald-500/20'
-                                          : isCurrent
-                                          ? isRejected
-                                            ? 'bg-red-950 border-red-400 text-red-200 ring-4 ring-red-500/20'
-                                            : 'bg-gradient-to-br from-blue-600 to-red-600 border-white/90 text-white ring-4 ring-blue-500/25 shadow-lg shadow-blue-500/30'
-                                          : 'bg-[#071226] border-blue-900/80 text-slate-400 group-hover:text-white group-hover:border-blue-500/70'
-                                      } ${isInspected && !isCurrent ? 'ring-2 ring-blue-400/60 scale-105' : ''}`}
-                                    >
-                                      {isCompleted && idx < currentStageIdx ? (
-                                        <Check className="w-4 h-4 stroke-[3]" />
-                                      ) : isDelivered && idx === 4 ? (
-                                        <Check className="w-4 h-4 stroke-[3]" />
-                                      ) : (
-                                        <StepIcon className="w-4 h-4" />
-                                      )}
-                                    </div>
-
-                                    <span
-                                      className={`mt-2 text-[10px] sm:text-xs font-mono font-semibold leading-tight whitespace-nowrap transition-colors ${
-                                        isCurrent
-                                          ? 'text-white'
-                                          : isCompleted
-                                          ? 'text-emerald-300'
-                                          : isInspected
-                                          ? 'text-blue-300'
-                                          : 'text-slate-400 group-hover:text-slate-200'
-                                      }`}
-                                    >
-                                      {stage.shortLabel}
-                                    </span>
-
-                                    <span
-                                      className={`mt-0.5 text-[9px] font-mono uppercase tracking-wider transition-opacity ${
-                                        isCurrent
-                                          ? isRejected
-                                            ? 'text-red-300 opacity-100'
-                                            : 'text-blue-300 opacity-100'
-                                          : isCompleted
-                                          ? 'text-emerald-400/80 opacity-100'
-                                          : isInspected
-                                          ? 'text-blue-300/90 opacity-100'
-                                          : 'opacity-0 group-hover:opacity-75 text-slate-400'
-                                      }`}
-                                    >
-                                      {idx < currentStageIdx || (isDelivered && idx === 4)
-                                        ? 'Done'
-                                        : isCurrent
-                                        ? isRejected
-                                          ? 'Hold'
-                                          : 'Active'
-                                        : isInspected
-                                        ? 'View'
-                                        : 'Next'}
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          {/* Milestone Inspection Panel */}
-                          <div className="p-3 rounded-lg bg-[#08142b]/85 border border-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="flex items-start gap-2.5">
-                              <div
-                                className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                                  inspectedIdx < currentStageIdx || (isDelivered && inspectedIdx === 4)
-                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                    : inspectedIdx === currentStageIdx
-                                    ? isRejected
-                                      ? 'bg-red-500/20 text-red-300 border border-red-500/40'
-                                      : 'bg-blue-500/20 text-blue-300 border border-blue-400/50'
-                                    : 'bg-[#040a18] text-slate-400 border border-blue-900/60'
-                                }`}
-                              >
-                                <InspectedIcon className="w-3.5 h-3.5" />
-                              </div>
-                              <div className="space-y-0.5">
-                                <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                                  <span className="font-bold text-white">{inspectedStage.title}</span>
-                                  <span aria-hidden="true" className="text-slate-600">·</span>
-                                  <span className="font-mono text-[11px] text-blue-300">
-                                    {inspectedStage.facility}
-                                  </span>
-                                </div>
-                                <p className="text-[11px] text-slate-300 leading-relaxed">
-                                  {inspectedStage.description(order)}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="text-[11px] font-mono shrink-0 sm:text-right">
-                              {inspectedIdx < currentStageIdx || (isDelivered && inspectedIdx === 4) ? (
-                                <span className="text-emerald-300 font-semibold">Milestone Completed</span>
-                              ) : inspectedIdx === currentStageIdx ? (
-                                <span className={isRejected ? 'text-red-300 font-semibold' : 'text-blue-300 font-semibold'}>
-                                  {isPending
-                                    ? 'Queued (Awaiting Elon Musk Management)'
-                                    : isRejected
-                                    ? 'Action Required'
-                                    : 'Currently In Progress'}
-                                </span>
-                              ) : (
-                                <span className="text-slate-400">
-                                  Est. {order.estimatedDelivery}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
+                        {/* Shipment Tracking Visual Timeline */}
+                        <ShipmentTracking
+                          order={order}
+                          trackingEvents={trackingEvents}
+                          onUpdateOrderStatus={onUpdateOrderStatus}
+                          inspectedStep={inspectedIdx}
+                          onSelectStep={(idx) =>
+                            setInspectedStepByOrder((prev) => ({
+                              ...prev,
+                              [order.orderId]: idx,
+                            }))
+                          }
+                        />
 
                         {/* Admin Approval Status Callout */}
                         {isPending ? (
@@ -1902,6 +1694,11 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                         const deliveryDateLabel = getOrderDeliveryDateLabel(order);
                         const trackingEvents = getOrderTrackingHistory(order);
                         const isHistoryExpanded = !!expandedHistoryByOrder[order.orderId];
+                        const isShipmentExpanded = !!expandedShipmentByOrder[order.orderId];
+                        const inspectedIdx =
+                          inspectedStepByOrder[order.orderId] !== undefined
+                            ? inspectedStepByOrder[order.orderId]
+                            : getOrderStageIndex(order);
 
                         return (
                           <div
@@ -2011,6 +1808,26 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                                 <button
                                   type="button"
                                   onClick={() =>
+                                    setExpandedShipmentByOrder((prev) => ({
+                                      ...prev,
+                                      [order.orderId]: !prev[order.orderId],
+                                    }))
+                                  }
+                                  aria-expanded={isShipmentExpanded}
+                                  className="text-xs text-blue-200 hover:text-white flex items-center gap-1 cursor-pointer font-mono whitespace-nowrap"
+                                >
+                                  <Truck className="w-3.5 h-3.5 text-blue-300" />
+                                  <span>Shipment Tracking</span>
+                                  {isShipmentExpanded ? (
+                                    <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                                  ) : (
+                                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                                  )}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
                                     setExpandedHistoryByOrder((prev) => ({
                                       ...prev,
                                       [order.orderId]: !prev[order.orderId],
@@ -2065,6 +1882,21 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({
                                 </button>
                               </div>
                             </div>
+
+                            {isShipmentExpanded && (
+                              <ShipmentTracking
+                                order={order}
+                                trackingEvents={trackingEvents}
+                                onUpdateOrderStatus={onUpdateOrderStatus}
+                                inspectedStep={inspectedIdx}
+                                onSelectStep={(idx) =>
+                                  setInspectedStepByOrder((prev) => ({
+                                    ...prev,
+                                    [order.orderId]: idx,
+                                  }))
+                                }
+                              />
+                            )}
 
                             {isHistoryExpanded && (
                               <div className="p-3.5 rounded-lg bg-[#040a18]/90 border border-blue-800/60 space-y-2.5">

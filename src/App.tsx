@@ -57,8 +57,13 @@ import { ShareCertificateModal } from './components/ShareCertificateModal';
 import { ReferralModal } from './components/ReferralModal';
 import { CharityDonationModal } from './components/CharityDonationModal';
 import { NotificationSettingsModal } from './components/NotificationSettingsModal';
+import { MemberAuthModal } from './components/MemberAuthModal';
 import { SiteLockoutScreen } from './components/SiteLockoutScreen';
 import { Footer } from './components/Footer';
+import {
+  MemberAccountSnapshot,
+  subscribeToMemberAuth,
+} from './utils/memberAuth';
 import {
   getLockoutStatus,
   LockoutStatus,
@@ -376,6 +381,14 @@ export default function App() {
   const [shareModalInitialQty, setShareModalInitialQty] = useState<number>(25);
   const [selectedShareCertOrder, setSelectedShareCertOrder] = useState<TeslaShareOrder | null>(null);
   const [lockoutStatus, setLockoutStatus] = useState<LockoutStatus>(() => getLockoutStatus());
+  const [memberUser, setMemberUser] = useState<MemberAccountSnapshot | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [authModalInitialTab, setAuthModalInitialTab] = useState<'register' | 'signin'>('signin');
+
+  const handleOpenAuthModal = (initialTab: 'register' | 'signin' = 'signin') => {
+    setAuthModalInitialTab(initialTab);
+    setIsAuthModalOpen(true);
+  };
 
   // Mobile Phone Notifications & App Sound State
   const [isNotificationSettingsOpen, setIsNotificationSettingsOpen] = useState<boolean>(false);
@@ -470,6 +483,14 @@ export default function App() {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [lockoutStatus.isLocked]);
+
+  // Listen to Member Authentication state smoothly without blocking startup
+  useEffect(() => {
+    const unsubscribe = subscribeToMemberAuth((member) => {
+      setMemberUser(member);
+    });
+    return unsubscribe;
+  }, []);
 
   // Sync to local storage
   useEffect(() => {
@@ -2035,6 +2056,8 @@ export default function App() {
         onOpenNotificationSettings={() => setIsNotificationSettingsOpen(true)}
         phoneNotificationsReady={phoneNotificationsReady}
         soundEnabled={soundEnabled}
+        currentUser={memberUser}
+        onOpenAuthModal={handleOpenAuthModal}
       />
 
       {/* Subtle Phone Notification & Sound Opt-In Bar when browser permission is not yet decided */}
@@ -2271,6 +2294,8 @@ export default function App() {
         onOpenRsvp={() => setIsRsvpOpen(true)}
         onSelectPage={handleSelectPage}
         onOpenCharity={() => setIsCharityOpen(true)}
+        onOpenAuthModal={handleOpenAuthModal}
+        isMemberSignedIn={memberUser !== null}
       />
 
       {/* Interactive Lightbox Modal */}
@@ -2315,6 +2340,8 @@ export default function App() {
         paymentAccountRequests={paymentAccountRequests}
         onRequestPaymentAccount={handleRequestPaymentAccount}
         onOpenInbox={() => setIsInboxOpen(true)}
+        defaultCustomerName={memberUser?.displayName || ''}
+        defaultCustomerEmail={memberUser?.email || ''}
       />
 
       {/* Official Merchandise Ordering Modal (Black Unisex T-Shirt & 3D Trucker Hat) */}
@@ -2331,6 +2358,8 @@ export default function App() {
         paymentAccountRequests={paymentAccountRequests}
         onRequestPaymentAccount={handleRequestPaymentAccount}
         onOpenInbox={() => setIsInboxOpen(true)}
+        defaultCustomerName={memberUser?.displayName || ''}
+        defaultCustomerEmail={memberUser?.email || ''}
       />
 
       {/* My Active Tesla Orders Tracker Modal */}
@@ -2430,6 +2459,8 @@ export default function App() {
         }}
         defaultReferralCode={appliedReferralCode}
         commissionPercent={commissionPercent}
+        defaultInvestorName={memberUser?.displayName || ''}
+        defaultInvestorEmail={memberUser?.email || ''}
       />
 
       {/* Official Delaware Stock Ownership Certificate Modal */}
@@ -2466,6 +2497,8 @@ export default function App() {
         onOpenInbox={() => setIsInboxOpen(true)}
         defaultReferralCode={appliedReferralCode}
         commissionPercent={commissionPercent}
+        defaultName={memberUser?.displayName || ''}
+        defaultEmail={memberUser?.email || ''}
       />
 
       {/* Visitor Referral Code & Commission Earnings Modal */}
@@ -2489,6 +2522,8 @@ export default function App() {
         paymentAccountRequests={paymentAccountRequests}
         onRequestPaymentAccount={handleRequestPaymentAccount}
         onOpenInbox={() => setIsInboxOpen(true)}
+        defaultVisitorName={memberUser?.displayName || ''}
+        defaultVisitorEmail={memberUser?.email || ''}
       />
 
       {/* Phone Notifications & Sound Settings Modal */}
@@ -2502,6 +2537,34 @@ export default function App() {
         onTogglePhoneAlerts={handleTogglePhoneAlerts}
         onToggleSound={handleToggleSoundAlerts}
         onSendTestNotification={handleSendTestPhoneNotification}
+      />
+
+      {/* Executive Email Registration & Member Sign-In Modal */}
+      <MemberAuthModal
+        isOpen={isAuthModalOpen}
+        initialTab={authModalInitialTab}
+        currentUser={memberUser}
+        onUserUpdated={setMemberUser}
+        onAccessGranted={(member, isNewRegistration) => {
+          const toastId = `toast-auth-${Date.now()}`;
+          setActivePushToast({
+            id: toastId,
+            title: isNewRegistration
+              ? 'Executive Member Account Active'
+              : 'Member Access Verified',
+            body: isNewRegistration
+              ? `Signed in as ${member.email || member.displayName || 'Member'}. Full platform access granted.`
+              : `Welcome back, ${member.displayName || member.email || 'Member'}. Your session is active.`,
+            category: 'general',
+          });
+          if (pushToastTimerRef.current !== null) {
+            window.clearTimeout(pushToastTimerRef.current);
+          }
+          pushToastTimerRef.current = window.setTimeout(() => {
+            setActivePushToast((curr) => (curr?.id === toastId ? null : curr));
+          }, 5000);
+        }}
+        onClose={() => setIsAuthModalOpen(false)}
       />
 
       {/* Top Floating Mobile-Style Push Notification Toast */}

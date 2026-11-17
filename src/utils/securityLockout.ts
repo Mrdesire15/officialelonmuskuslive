@@ -3,8 +3,8 @@ const COOKIE_NAME = 'em_sec_lock_until';
 const LOCKOUT_EVENT = 'em-security-lockout-changed';
 
 export const MAX_FAILED_PASSWORD_ATTEMPTS = 3;
-export const LOCKOUT_DURATION_MS = 5 * 60 * 1000; // 5 minutes
-export const LOCKOUT_DURATION_MINUTES = 5;
+export const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
+export const LOCKOUT_DURATION_MINUTES = 30;
 
 // SHA-256 digest of the management passcode (plaintext never stored in client bundle)
 const ADMIN_PASSCODE_SHA256 =
