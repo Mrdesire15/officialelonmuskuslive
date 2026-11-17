@@ -171,6 +171,193 @@ const getEffectiveSpecMetrics = (
   };
 };
 
+interface BatteryEfficiencyMetrics {
+  healthPct: number;
+  estimatedRangeMiles: number;
+  highwayRangeMiles: number;
+  batteryKwh: number;
+  miPerKwh: number;
+  whPerMi: number;
+  efficiencyPct: number;
+  ratingLabel: string;
+  chargeGainShort: string;
+}
+
+const getBatteryEfficiencyMetrics = (
+  vehicle: TeslaVehicle,
+  specs: VehicleDetailedSpecs,
+  isPerfMode: boolean
+): BatteryEfficiencyMetrics => {
+  const baseRangeMiles = extractFirstFloat(vehicle.range) ?? 320;
+  const batteryKwh = extractFirstFloat(specs.batteryPack) ?? 100;
+  const estimatedRangeMiles = isPerfMode
+    ? Math.round(baseRangeMiles * 0.84)
+    : Math.round(baseRangeMiles);
+  const highwayRangeMiles = Math.round(estimatedRangeMiles * 0.92);
+  const miPerKwh = batteryKwh > 0 ? estimatedRangeMiles / batteryKwh : 3.3;
+  const whPerMi =
+    estimatedRangeMiles > 0 ? Math.round((batteryKwh * 1000) / estimatedRangeMiles) : 300;
+  const efficiencyPct = Math.min(100, Math.max(42, Math.round((miPerKwh / 4.15) * 100)));
+
+  let ratingLabel = 'Heavy Utility';
+  if (isPerfMode) {
+    ratingLabel = 'Track Draw';
+  } else if (miPerKwh >= 3.6) {
+    ratingLabel = 'Peak Aero';
+  } else if (miPerKwh >= 3.1) {
+    ratingLabel = 'Balanced';
+  }
+
+  const chargeGainShort = specs.charge15MinMiles
+    .replace(/Miles in 15 Minutes/i, 'mi / 15m')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return {
+    healthPct: 100,
+    estimatedRangeMiles,
+    highwayRangeMiles,
+    batteryKwh,
+    miPerKwh,
+    whPerMi,
+    efficiencyPct,
+    ratingLabel,
+    chargeGainShort,
+  };
+};
+
+interface BatteryHealthEfficiencyIndicatorProps {
+  vehicle: TeslaVehicle;
+  specs: VehicleDetailedSpecs;
+  isPerfMode: boolean;
+  onInspectBattery?: () => void;
+}
+
+const BatteryHealthEfficiencyIndicator: React.FC<BatteryHealthEfficiencyIndicatorProps> = ({
+  vehicle,
+  specs,
+  isPerfMode,
+  onInspectBattery,
+}) => {
+  const metrics = getBatteryEfficiencyMetrics(vehicle, specs, isPerfMode);
+  const gradientId = `battery-eff-grad-${vehicle.id}-${isPerfMode ? 'perf' : 'std'}`;
+
+  return (
+    <div
+      className={`rounded-xl border p-3 space-y-2.5 transition-colors ${
+        isPerfMode
+          ? 'bg-[#0b0e1f]/95 border-amber-500/45'
+          : 'bg-[#040a18]/90 border-blue-900/65'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2 text-[10px] font-mono">
+        <span className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-emerald-300 truncate">
+          <BatteryCharging className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          <span className="truncate">Battery Health / Efficiency</span>
+        </span>
+
+        <div className="flex items-center gap-2 shrink-0 tabular-nums">
+          <span
+            className={`font-bold uppercase tracking-wider ${
+              isPerfMode ? 'text-amber-300' : 'text-emerald-300'
+            }`}
+          >
+            {metrics.healthPct}% SoH · {metrics.ratingLabel}
+          </span>
+          {onInspectBattery && (
+            <button
+              type="button"
+              onClick={onInspectBattery}
+              className="text-[10px] text-blue-300 hover:text-white underline underline-offset-2 cursor-pointer"
+              title="Open battery & charging engineering dossier"
+            >
+              Details
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Visual Efficiency & State-of-Health Meter */}
+      <div
+        className="w-full"
+        role="progressbar"
+        aria-label={`${vehicle.name} battery efficiency ${metrics.efficiencyPct}%`}
+        aria-valuenow={metrics.efficiencyPct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <svg
+          className="w-full h-2 rounded-full bg-[#08142b] border border-blue-900/60 block overflow-hidden"
+          viewBox="0 0 100 8"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+              {isPerfMode ? (
+                <>
+                  <stop offset="0%" stopColor="#f59e0b" />
+                  <stop offset="100%" stopColor="#ef4444" />
+                </>
+              ) : (
+                <>
+                  <stop offset="0%" stopColor="#10b981" />
+                  <stop offset="55%" stopColor="#2dd4bf" />
+                  <stop offset="100%" stopColor="#3b82f6" />
+                </>
+              )}
+            </linearGradient>
+          </defs>
+          <rect
+            x="0"
+            y="0"
+            width={metrics.efficiencyPct}
+            height="8"
+            rx="4"
+            fill={`url(#${gradientId})`}
+          />
+        </svg>
+      </div>
+
+      {/* Estimated Range & Efficiency Specs Readout */}
+      <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono tabular-nums">
+        <div className="px-2 py-1.5 rounded-lg bg-[#08142b]/85 border border-blue-900/50">
+          <span className="text-slate-400 uppercase block text-[9px]">Est. Range</span>
+          <span
+            className={`font-bold block mt-0.5 ${
+              isPerfMode ? 'text-amber-300' : 'text-white'
+            }`}
+          >
+            {metrics.estimatedRangeMiles} mi {isPerfMode ? 'Track' : 'EPA'}
+          </span>
+          <span className="text-[9px] text-slate-400 block truncate">
+            ~{metrics.highwayRangeMiles} mi hwy
+          </span>
+        </div>
+
+        <div className="px-2 py-1.5 rounded-lg bg-[#08142b]/85 border border-blue-900/50">
+          <span className="text-slate-400 uppercase block text-[9px]">Efficiency</span>
+          <span className="text-emerald-300 font-bold block mt-0.5">
+            {metrics.whPerMi} Wh/mi
+          </span>
+          <span className="text-[9px] text-slate-400 block truncate">
+            {metrics.miPerKwh.toFixed(2)} mi/kWh
+          </span>
+        </div>
+
+        <div className="px-2 py-1.5 rounded-lg bg-[#08142b]/85 border border-blue-900/50">
+          <span className="text-slate-400 uppercase block text-[9px]">Pack / Gain</span>
+          <span className="text-blue-200 font-bold block mt-0.5 truncate">
+            {metrics.batteryKwh} kWh
+          </span>
+          <span className="text-[9px] text-slate-400 block truncate">
+            {metrics.chargeGainShort}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
   onSelectVehicleToOrder,
   onSelectMerchToOrder,
@@ -632,6 +819,13 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
                         <span className="text-sm font-bold text-white">{haloEffective.topSpeed}</span>
                       </div>
                     </div>
+
+                    <BatteryHealthEfficiencyIndicator
+                      vehicle={haloVehicle}
+                      specs={haloVehicleSpecs}
+                      isPerfMode={isHaloPerf}
+                      onInspectBattery={() => openDossier(haloVehicle, 'battery')}
+                    />
                   </div>
                 );
               })()}
@@ -1361,6 +1555,13 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
                               </span>
                             </div>
                           </div>
+
+                          <BatteryHealthEfficiencyIndicator
+                            vehicle={vehicle}
+                            specs={specs}
+                            isPerfMode={isPerfMode}
+                            onInspectBattery={() => openDossier(vehicle, 'battery')}
+                          />
                         </div>
                       );
                     })()}
