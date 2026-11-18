@@ -446,8 +446,8 @@ export default function App() {
   // Slide-in transition animation direction when switching pages
   const [slideDirection, setSlideDirection] = useState<'forward' | 'backward'>('forward');
 
-  // View arrangement mode: 'paged' (page by page, arranged) or 'scroll' (continuous)
-  const [viewMode, setViewMode] = useState<'paged' | 'scroll'>('paged');
+  // View arrangement mode: 'scroll' (all sections publicly visible) or 'paged' (chapter-by-chapter)
+  const [viewMode, setViewMode] = useState<'paged' | 'scroll'>('scroll');
 
   // Admin state (requires passcode verification; never granted via URL params)
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
@@ -848,21 +848,52 @@ export default function App() {
       setSlideDirection(newIndex > oldIndex ? 'forward' : 'backward');
     }
     setActivePage(page);
+
+    const hashMapping: Record<PageId, string> = {
+      'executive': '#meet',
+      'enterprises': '#about',
+      'flying-roadster': '#flying-roadster',
+      'showroom': '#showroom',
+      'shares': '#shares',
+      'gallery': '#gallery',
+    };
+    const targetHash = hashMapping[page];
+
     try {
-      const hashMapping: Record<PageId, string> = {
-        'executive': '#meet',
-        'enterprises': '#about',
-        'flying-roadster': '#flying-roadster',
-        'showroom': '#showroom',
-        'shares': '#shares',
-        'gallery': '#gallery',
-      };
       if (window.history && window.history.replaceState) {
-        window.history.replaceState(null, '', hashMapping[page]);
+        window.history.replaceState(null, '', targetHash);
       }
     } catch {}
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    if (viewMode === 'scroll') {
+      if (page === 'executive') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        window.requestAnimationFrame(() => {
+          const el = document.querySelector(targetHash);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        });
+      }
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
+
+  // Scroll smoothly to any hash anchor present on initial load when in scroll mode
+  useEffect(() => {
+    if (viewMode !== 'scroll' || typeof window === 'undefined' || !window.location.hash) return;
+    const hash = window.location.hash;
+    const mappedId = hash === '#enterprises' ? '#about' : hash === '#flying-car' ? '#flying-roadster' : hash === '#tesla' ? '#showroom' : hash === '#tsla' || hash === '#equity' ? '#shares' : hash;
+    const timer = window.setTimeout(() => {
+      const target = document.querySelector(mappedId);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const handlePrimaryAction = (pageId: PageId) => {
     switch (pageId) {
@@ -928,7 +959,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activePage]);
+  }, [activePage, viewMode]);
 
   const logReferralConversion = (params: {
     orderId: string;

@@ -113,7 +113,7 @@ export const Footer: React.FC<FooterProps> = ({
             <button
               onClick={() => {
                 if (onSelectPage) onSelectPage('executive');
-                scrollToTop();
+                else scrollToTop();
               }}
               className="hover:text-blue-300 transition-colors cursor-pointer"
             >
@@ -123,7 +123,7 @@ export const Footer: React.FC<FooterProps> = ({
             <button
               onClick={() => {
                 if (onSelectPage) onSelectPage('enterprises');
-                scrollToTop();
+                else scrollToTop();
               }}
               className="hover:text-blue-300 transition-colors cursor-pointer"
             >
@@ -133,7 +133,7 @@ export const Footer: React.FC<FooterProps> = ({
             <button
               onClick={() => {
                 if (onSelectPage) onSelectPage('flying-roadster');
-                scrollToTop();
+                else scrollToTop();
               }}
               className="hover:text-blue-300 transition-colors cursor-pointer"
             >
@@ -143,7 +143,7 @@ export const Footer: React.FC<FooterProps> = ({
             <button
               onClick={() => {
                 if (onSelectPage) onSelectPage('showroom');
-                scrollToTop();
+                else scrollToTop();
               }}
               className="hover:text-blue-300 transition-colors cursor-pointer"
             >
@@ -153,7 +153,7 @@ export const Footer: React.FC<FooterProps> = ({
             <button
               onClick={() => {
                 if (onSelectPage) onSelectPage('shares');
-                scrollToTop();
+                else scrollToTop();
               }}
               className="hover:text-red-300 transition-colors cursor-pointer"
             >
@@ -163,7 +163,7 @@ export const Footer: React.FC<FooterProps> = ({
             <button
               onClick={() => {
                 if (onSelectPage) onSelectPage('gallery');
-                scrollToTop();
+                else scrollToTop();
               }}
               className="hover:text-blue-300 transition-colors cursor-pointer"
             >

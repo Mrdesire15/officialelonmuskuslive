@@ -68,6 +68,9 @@ export default defineConfig(() => {
         },
         workbox: {
           importScripts: ['/sw-notifications.js'],
+          skipWaiting: true,
+          clientsClaim: true,
+          cleanupOutdatedCaches: true,
           globPatterns: ['**/*.{js,css,html,ico,png,jpg,jpeg,webp,svg,woff,woff2}'],
           navigateFallbackDenylist: [/^\/assets\//],
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,

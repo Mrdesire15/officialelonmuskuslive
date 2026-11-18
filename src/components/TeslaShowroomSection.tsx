@@ -24,6 +24,7 @@ import { TeslaVehicle, VehicleDetailedSpecs, PageId, MerchProduct } from '../typ
 import { TESLA_VEHICLES, getVehicleDetailedSpecs } from '../data/teslaVehicles';
 import { MERCH_PRODUCTS } from '../data/merchProducts';
 import { handleImageFallback, normalizePhotoSrc } from '../utils/photoHelper';
+import { BatteryEfficiencyTrendChart } from './BatteryEfficiencyTrendChart';
 
 interface TeslaShowroomSectionProps {
   onSelectVehicleToOrder: (vehicle: TeslaVehicle) => void;
@@ -380,6 +381,22 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
     Object.fromEntries(MERCH_PRODUCTS.map((p) => [p.id, p.defaultSize]))
   );
   const [brokenMerchImages, setBrokenMerchImages] = useState<Record<string, boolean>>({});
+  const [trendVehicleIds, setTrendVehicleIds] = useState<string[]>([
+    'tesla-model-s-plaid',
+    'tesla-cybertruck-cyberbeast',
+    'tesla-model-3-performance',
+    'tesla-model-y-long-range',
+  ]);
+
+  const handleToggleTrendVehicleId = (vehicleId: string) => {
+    setTrendVehicleIds((prev) => {
+      if (prev.includes(vehicleId)) {
+        if (prev.length <= 1) return prev;
+        return prev.filter((id) => id !== vehicleId);
+      }
+      return [...prev, vehicleId];
+    });
+  };
 
   const toggleVehiclePerformanceMode = (vehicleId: string) => {
     setPerformanceModeByVehicle((prev) => ({
@@ -1616,6 +1633,20 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
             );
           })}
         </div>
+
+        {/* D3.js Battery Health / Efficiency Trend Chart Over Time */}
+        <BatteryEfficiencyTrendChart
+          vehicles={allVehicles}
+          selectedVehicleIds={trendVehicleIds}
+          onToggleVehicleId={handleToggleTrendVehicleId}
+          onSyncWithCompare={() => {
+            const synced = Array.from(
+              new Set([compareVehicleA.id, compareVehicleB.id].filter(Boolean))
+            );
+            if (synced.length > 0) setTrendVehicleIds(synced);
+          }}
+          performanceModeByVehicle={performanceModeByVehicle}
+        />
 
         {/* Comprehensive Real-Car Standard Offerings Summary Banner */}
         <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-[#08152f] via-[#061024] to-[#1a0b18] border border-blue-500/40 shadow-2xl space-y-6 mb-10">
