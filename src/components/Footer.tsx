@@ -1,7 +1,6 @@
 import React from 'react';
 import { ArrowUp } from 'lucide-react';
 import { PageId } from '../types';
-import { PWAInstallButton } from './PWAInstallButton';
 
 interface FooterProps {
   onOpenRsvp: () => void;
@@ -85,13 +84,12 @@ export const Footer: React.FC<FooterProps> = ({
               {onOpenAuthModal && (
                 <button
                   type="button"
-                  onClick={() => onOpenAuthModal('signin')}
+                  onClick={() => onOpenAuthModal(isMemberSignedIn ? 'signin' : 'register')}
                   className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/35 text-blue-200 border border-blue-500/45 text-xs transition-colors cursor-pointer"
                 >
-                  {isMemberSignedIn ? 'Member Account' : 'Member Sign In'}
+                  {isMemberSignedIn ? 'Member Account' : 'Member Sign Up'}
                 </button>
               )}
-              <PWAInstallButton compact />
 
               <button
                 onClick={scrollToTop}

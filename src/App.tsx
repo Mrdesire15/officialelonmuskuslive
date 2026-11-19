@@ -4,7 +4,20 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { BellRing, X } from 'lucide-react';
+import {
+  ArrowRight,
+  Award,
+  BellRing,
+  Camera,
+  Car,
+  Lock,
+  Rocket,
+  ShieldCheck,
+  TrendingUp,
+  UserPlus,
+  Wind,
+  X,
+} from 'lucide-react';
 import { 
   INITIAL_PROFILE, 
   INITIAL_COMPANIES, 
@@ -372,10 +385,6 @@ export default function App() {
   const [isContentStudioOpen, setIsContentStudioOpen] = useState<boolean>(false);
   const [isRsvpOpen, setIsRsvpOpen] = useState<boolean>(false);
   const [rsvpDefaultTier, setRsvpDefaultTier] = useState<VipTier>('christmas-fan-card');
-  const handleOpenRsvp = (tier?: VipTier) => {
-    setRsvpDefaultTier(tier || 'christmas-fan-card');
-    setIsRsvpOpen(true);
-  };
   const [orderingVehicle, setOrderingVehicle] = useState<TeslaVehicle | null>(null);
   const [orderingMerch, setOrderingMerch] = useState<{
     product: MerchProduct;
@@ -393,11 +402,47 @@ export default function App() {
   const [lockoutStatus, setLockoutStatus] = useState<LockoutStatus>(() => getLockoutStatus());
   const [memberUser, setMemberUser] = useState<MemberAccountSnapshot | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
-  const [authModalInitialTab, setAuthModalInitialTab] = useState<'register' | 'signin'>('signin');
+  const [authModalInitialTab, setAuthModalInitialTab] = useState<'register' | 'signin'>('register');
+  const [authGateNotice, setAuthGateNotice] = useState<string | null>(null);
+  const pendingAuthActionRef = useRef<(() => void) | null>(null);
 
-  const handleOpenAuthModal = (initialTab: 'register' | 'signin' = 'signin') => {
+  const handleOpenAuthModal = (
+    initialTab: 'register' | 'signin' = 'register',
+    notice?: string | null
+  ) => {
+    if (!notice) {
+      pendingAuthActionRef.current = null;
+      setAuthGateNotice(null);
+    } else {
+      setAuthGateNotice(notice);
+    }
     setAuthModalInitialTab(initialTab);
     setIsAuthModalOpen(true);
+  };
+
+  const requireMemberSignup = (
+    notice: string,
+    onAllowed: () => void,
+    preferredTab: 'register' | 'signin' = 'register'
+  ) => {
+    if (memberUser) {
+      onAllowed();
+      return;
+    }
+    pendingAuthActionRef.current = onAllowed;
+    setAuthGateNotice(notice);
+    setAuthModalInitialTab(preferredTab);
+    setIsAuthModalOpen(true);
+  };
+
+  const handleOpenRsvp = (tier?: VipTier) => {
+    requireMemberSignup(
+      'Sign up for a free member account to reserve the Christmas Limited Fan Card ($1,000) or VIP Greet & Meet Passes.',
+      () => {
+        setRsvpDefaultTier(tier || 'christmas-fan-card');
+        setIsRsvpOpen(true);
+      }
+    );
   };
 
   // Mobile Phone Notifications & App Sound State
@@ -415,13 +460,6 @@ export default function App() {
     body: string;
     category?: string;
   } | null>(null);
-  const [optInDismissed, setOptInDismissed] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('elon_meet_phone_optin_dismissed_v1') === 'true';
-    } catch {
-      return false;
-    }
-  });
   const knownInboxIdsRef = useRef<Set<string> | null>(null);
   const knownReplyCountsRef = useRef<Map<string, number>>(new Map());
   const pushToastTimerRef = useRef<number | null>(null);
@@ -498,6 +536,17 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = subscribeToMemberAuth((member) => {
       setMemberUser(member);
+      if (!member) {
+        setActivePage('executive');
+        setIsRsvpOpen(false);
+        setOrderingVehicle(null);
+        setOrderingMerch(null);
+        setIsMyOrdersOpen(false);
+        setIsInboxOpen(false);
+        setIsShareModalOpen(false);
+        setIsReferralModalOpen(false);
+        setIsCharityOpen(false);
+      }
     });
     return unsubscribe;
   }, []);
@@ -841,7 +890,7 @@ export default function App() {
   };
 
   // Page navigation handlers
-  const handleSelectPage = (page: PageId) => {
+  const navigateToPage = (page: PageId) => {
     const oldIndex = PAGES_CONFIG.findIndex((p) => p.id === activePage);
     const newIndex = PAGES_CONFIG.findIndex((p) => p.id === page);
     if (newIndex !== -1 && oldIndex !== -1 && newIndex !== oldIndex) {
@@ -869,21 +918,33 @@ export default function App() {
       if (page === 'executive') {
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
-        window.requestAnimationFrame(() => {
+        window.setTimeout(() => {
           const el = document.querySelector(targetHash);
           if (el) {
             el.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
-        });
+        }, 70);
       }
     } else {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
-  // Scroll smoothly to any hash anchor present on initial load when in scroll mode
+  const handleSelectPage = (page: PageId) => {
+    if (page !== 'executive' && !memberUser) {
+      const targetMeta = PAGES_CONFIG.find((p) => p.id === page);
+      requireMemberSignup(
+        `Sign up for a free member account to unlock ${targetMeta?.name || 'this section'} and full platform features.`,
+        () => navigateToPage(page)
+      );
+      return;
+    }
+    navigateToPage(page);
+  };
+
+  // Scroll smoothly to any hash anchor present on initial load when signed in & in scroll mode
   useEffect(() => {
-    if (viewMode !== 'scroll' || typeof window === 'undefined' || !window.location.hash) return;
+    if (!memberUser || viewMode !== 'scroll' || typeof window === 'undefined' || !window.location.hash) return;
     const hash = window.location.hash;
     const mappedId = hash === '#enterprises' ? '#about' : hash === '#flying-car' ? '#flying-roadster' : hash === '#tesla' ? '#showroom' : hash === '#tsla' || hash === '#equity' ? '#shares' : hash;
     const timer = window.setTimeout(() => {
@@ -893,12 +954,12 @@ export default function App() {
       }
     }, 120);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [memberUser, viewMode]);
 
   const handlePrimaryAction = (pageId: PageId) => {
     switch (pageId) {
       case 'executive':
-        setIsRsvpOpen(true);
+        handleOpenRsvp('christmas-fan-card');
         break;
       case 'enterprises':
         handleSelectPage('flying-roadster');
@@ -908,22 +969,35 @@ export default function App() {
         break;
       case 'showroom':
         if (TESLA_VEHICLES.length > 0) {
-          setOrderingVehicle(TESLA_VEHICLES[0]);
+          requireMemberSignup(
+            'Sign up for a free member account to configure and order Tesla vehicles.',
+            () => setOrderingVehicle(TESLA_VEHICLES[0])
+          );
         }
         break;
       case 'shares':
-        setShareModalInitialQty(25);
-        setIsShareModalOpen(true);
+        requireMemberSignup(
+          'Sign up for a free member account to access the TSLA Direct Equity Desk.',
+          () => {
+            setShareModalInitialQty(25);
+            setIsShareModalOpen(true);
+          }
+        );
         break;
       case 'gallery':
-        if (gallery.length > 0) {
-          setLightboxIndex(0);
-        }
+        requireMemberSignup(
+          'Sign up for a free member account to view the full archival gallery.',
+          () => {
+            if (gallery.length > 0) {
+              setLightboxIndex(0);
+            }
+          }
+        );
         break;
     }
   };
 
-  // Keyboard shortcut listener for fast chapter jumping (1-5 and Arrow keys)
+  // Keyboard shortcut listener for fast chapter jumping (1-6 and Arrow keys)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -931,7 +1005,7 @@ export default function App() {
         return;
       }
 
-      // Check number keys 1-5
+      // Check number keys 1-6
       const keyNum = parseInt(e.key, 10);
       if (!isNaN(keyNum) && keyNum >= 1 && keyNum <= PAGES_CONFIG.length) {
         e.preventDefault();
@@ -959,7 +1033,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activePage, viewMode]);
+  }, [activePage, viewMode, memberUser]);
 
   const logReferralConversion = (params: {
     orderId: string;
@@ -1985,8 +2059,13 @@ export default function App() {
   };
 
   const handlePreOrderFlyingRoadster = () => {
-    const roadster = allVehicles.find((v) => v.id === 'tesla-flying-roadster') || allVehicles[0];
-    setOrderingVehicle(roadster);
+    requireMemberSignup(
+      'Sign up for a free member account to configure and pre-order the Tesla Flying Roadster.',
+      () => {
+        const roadster = allVehicles.find((v) => v.id === 'tesla-flying-roadster') || allVehicles[0];
+        setOrderingVehicle(roadster);
+      }
+    );
   };
 
   const handleResetAll = () => {
@@ -2084,9 +2163,19 @@ export default function App() {
       <Navbar
         onOpenContentStudio={() => setIsContentStudioOpen(true)}
         onOpenRsvp={() => handleOpenRsvp('christmas-fan-card')}
-        onOpenMyOrders={() => setIsMyOrdersOpen(true)}
+        onOpenMyOrders={() =>
+          requireMemberSignup(
+            'Sign up or sign in to view and track your Tesla vehicle and merchandise orders.',
+            () => setIsMyOrdersOpen(true)
+          )
+        }
         onPreOrderRoadster={handlePreOrderFlyingRoadster}
-        onOpenInbox={() => setIsInboxOpen(true)}
+        onOpenInbox={() =>
+          requireMemberSignup(
+            'Sign up or sign in to open your Elon Musk Official In-App Inbox.',
+            () => setIsInboxOpen(true)
+          )
+        }
         inboxUnreadCount={unreadInboxCount}
         onOpenAdminPortal={() => setIsAdminPortalOpen(true)}
         galleryCount={gallery.length}
@@ -2095,62 +2184,213 @@ export default function App() {
         activePage={activePage}
         onSelectPage={handleSelectPage}
         viewMode={viewMode}
-        onToggleViewMode={() => setViewMode((prev) => (prev === 'paged' ? 'scroll' : 'paged'))}
-        onOpenReferralModal={() => setIsReferralModalOpen(true)}
+        onToggleViewMode={() =>
+          requireMemberSignup(
+            'Sign up to unlock Paged and Continuous Scroll views across all 6 platform chapters.',
+            () => setViewMode((prev) => (prev === 'paged' ? 'scroll' : 'paged'))
+          )
+        }
+        onOpenReferralModal={() =>
+          requireMemberSignup(
+            'Sign up or sign in to access your personal Referral Code and commission earnings.',
+            () => setIsReferralModalOpen(true)
+          )
+        }
         commissionPercent={commissionPercent}
-        onOpenCharity={() => setIsCharityOpen(true)}
-        onOpenNotificationSettings={() => setIsNotificationSettingsOpen(true)}
+        onOpenCharity={() =>
+          requireMemberSignup(
+            'Sign up or sign in to access Official Charity NGO donations and country relief support.',
+            () => setIsCharityOpen(true)
+          )
+        }
+        onOpenNotificationSettings={() =>
+          requireMemberSignup(
+            'Sign up or sign in to configure phone notifications and alert sound preferences.',
+            () => setIsNotificationSettingsOpen(true)
+          )
+        }
         phoneNotificationsReady={phoneNotificationsReady}
         soundEnabled={soundEnabled}
         currentUser={memberUser}
-        onOpenAuthModal={handleOpenAuthModal}
+        onOpenAuthModal={(tab) => handleOpenAuthModal(tab)}
       />
 
-      {/* Subtle Phone Notification & Sound Opt-In Bar when browser permission is not yet decided */}
-      {permissionState === 'default' && !optInDismissed && (
-        <div className="relative z-40 bg-[#07142b]/95 border-b border-blue-800/60 px-4 py-2 text-xs">
-          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-slate-200 min-w-0">
-              <BellRing className="w-3.5 h-3.5 text-blue-300 shrink-0" />
-              <span className="truncate">
-                Enable phone notifications &amp; app chime sounds for live order approvals, market alerts &amp; executive messages.
-              </span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  void handleRequestPhonePermission().then((res) => {
-                    if (res === 'granted') {
-                      void handleSendTestPhoneNotification();
-                    }
-                  });
-                }}
-                className="px-3 py-1 rounded-lg bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 text-white font-bold text-[11px] cursor-pointer whitespace-nowrap"
-              >
-                Enable Alerts &amp; Sound
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setOptInDismissed(true);
-                  try {
-                    localStorage.setItem('elon_meet_phone_optin_dismissed_v1', 'true');
-                  } catch {}
-                }}
-                aria-label="Dismiss notification prompt"
-                className="p-1 rounded-md text-slate-400 hover:text-white cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Content Sections: Arranged Page-by-Page with distinct commands */}
+      {/* Main Content Sections */}
       <main className="flex-1 relative z-10">
-        {viewMode === 'paged' ? (
+        {!memberUser ? (
+          /* Guest / Pre-Signup Experience: Chapter 01 Welcome Preview + Full Platform Sign-Up Gate */
+          <div>
+            <HeroSection
+              profile={profile}
+              gallery={gallery}
+              onOpenGallery={() => handleSelectPage('gallery')}
+              onOpenLightbox={(idx) => setLightboxIndex(idx)}
+              onOpenRsvp={handleOpenRsvp}
+              onSelectPage={handleSelectPage}
+              referralCode={visitorReferralCode}
+              commissionPercent={commissionPercent}
+              referralEarnedUsd={visitorReferralEarnedUsd}
+              onOpenReferralModal={() =>
+                requireMemberSignup(
+                  'Sign up or sign in to access your personal Referral Code and commission earnings.',
+                  () => setIsReferralModalOpen(true)
+                )
+              }
+              onOpenCharity={() =>
+                requireMemberSignup(
+                  'Sign up or sign in to access Official Charity NGO donations and country relief support.',
+                  () => setIsCharityOpen(true)
+                )
+              }
+            />
+
+            {/* Member Sign-Up Required Gate Banner */}
+            <section
+              id="member-access-gate"
+              className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8 border-t border-blue-900/60 bg-gradient-to-b from-[#040a18]/95 via-[#07132b]/95 to-[#040a18]"
+            >
+              <div className="max-w-6xl mx-auto rounded-3xl bg-[#07132c]/95 border border-blue-500/45 shadow-2xl overflow-hidden">
+                <div className="h-[2px] w-full us-flag-strip" />
+                <div className="p-6 sm:p-10 space-y-8">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                    <div className="space-y-3 max-w-2xl">
+                      <div className="inline-flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-widest text-blue-300">
+                        <Lock className="w-3.5 h-3.5 text-red-400" />
+                        <span>Member Sign-Up Required · Full Platform Access</span>
+                      </div>
+                      <h2 className="font-display text-2xl sm:text-4xl font-bold text-white leading-tight">
+                        Sign Up Free to Unlock <span className="us-text-gradient">All Full Features</span>
+                      </h2>
+                      <p className="text-sm text-slate-300 leading-relaxed">
+                        Create your encrypted member account in seconds to unlock the 6 Frontier Enterprises, Tesla Flying Roadster Flight Lab, Tesla Showroom with D3.js Battery Efficiency Trends, Direct TSLA Shares Desk, Complete Photo Archive, VIP Fan Cards, Charity NGO &amp; Executive Inbox.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleOpenAuthModal(
+                            'register',
+                            'Create your free encrypted member account to unlock every chapter, vehicle order desk, D3.js battery analytics, and VIP portal.'
+                          )
+                        }
+                        className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-600/25 border border-white/20 flex items-center gap-2 cursor-pointer transition-all"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                        <span>Sign Up to Unlock Full Access</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleOpenAuthModal(
+                            'signin',
+                            'Sign in with your existing member email and password to restore your full platform session.'
+                          )
+                        }
+                        className="px-5 py-3.5 rounded-xl bg-[#040a18] border border-blue-500/50 hover:border-blue-300 text-blue-100 hover:text-white font-semibold text-xs sm:text-sm cursor-pointer transition-all"
+                      >
+                        Already a Member? Sign In
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Interactive Preview Cards of Gated Modules */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2 border-t border-blue-900/60">
+                    {[
+                      {
+                        icon: Rocket,
+                        tag: 'Chapter 02',
+                        title: 'Frontier Enterprises',
+                        desc: 'SpaceX, Tesla, xAI, Neuralink, Starlink & X dossiers.',
+                        onUnlock: () => navigateToPage('enterprises'),
+                      },
+                      {
+                        icon: Wind,
+                        tag: 'Chapter 03',
+                        title: 'Flying Roadster Lab',
+                        desc: 'Cold-gas thruster hoverflight specs & priority pre-orders.',
+                        onUnlock: () => navigateToPage('flying-roadster'),
+                      },
+                      {
+                        icon: Car,
+                        tag: 'Chapter 04',
+                        title: 'Showroom & D3.js Trends',
+                        desc: 'Full Tesla lineup, merch & interactive 8-year Battery Health charts.',
+                        onUnlock: () => navigateToPage('showroom'),
+                      },
+                      {
+                        icon: TrendingUp,
+                        tag: 'Chapter 05',
+                        title: 'TSLA Direct Equity Desk',
+                        desc: 'Live share simulator, Delaware DRS certificates & target alerts.',
+                        onUnlock: () => navigateToPage('shares'),
+                      },
+                      {
+                        icon: Camera,
+                        tag: 'Chapter 06',
+                        title: 'Full Photo Archive',
+                        desc: `Browse all ${gallery.length} high-resolution archival photographs.`,
+                        onUnlock: () => navigateToPage('gallery'),
+                      },
+                      {
+                        icon: Award,
+                        tag: 'Member Portals',
+                        title: 'VIP Passes, Charity & Inbox',
+                        desc: 'Christmas Fan Card ($1k offer), order tracking & live concierge.',
+                        onUnlock: () => {
+                          setRsvpDefaultTier('christmas-fan-card');
+                          setIsRsvpOpen(true);
+                        },
+                      },
+                    ].map((feature) => {
+                      const IconComp = feature.icon;
+                      return (
+                        <button
+                          key={feature.title}
+                          type="button"
+                          onClick={() =>
+                            requireMemberSignup(
+                              `Sign up for a free member account to unlock ${feature.title}.`,
+                              feature.onUnlock
+                            )
+                          }
+                          className="group text-left p-4 rounded-2xl bg-[#040a18]/90 border border-blue-900/70 hover:border-blue-400/75 transition-all cursor-pointer flex items-start justify-between gap-3"
+                        >
+                          <div className="space-y-1.5 min-w-0">
+                            <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-blue-300 font-bold">
+                              <IconComp className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                              <span>{feature.tag}</span>
+                            </div>
+                            <div className="text-sm font-bold text-white group-hover:text-blue-200 transition-colors">
+                              {feature.title}
+                            </div>
+                            <p className="text-xs text-slate-400 leading-relaxed">
+                              {feature.desc}
+                            </p>
+                          </div>
+                          <span className="p-2 rounded-lg bg-[#08152e] border border-blue-800/60 text-blue-300 group-hover:text-white group-hover:border-blue-400 transition-colors shrink-0">
+                            <Lock className="w-3.5 h-3.5" />
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-[11px] font-mono text-slate-400">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Instant salted PBKDF2 account activation · No waiting period</span>
+                    </div>
+                    <span>Chapter 01 Executive Brief remains open to all visitors</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : viewMode === 'paged' ? (
           <div 
             key={`${activePage}-${slideDirection}`} 
             className={`w-full overflow-x-hidden ${slideDirection === 'forward' ? 'animate-slide-in-forward' : 'animate-slide-in-backward'}`}
@@ -2343,8 +2583,13 @@ export default function App() {
       <Footer
         onOpenRsvp={() => handleOpenRsvp('christmas-fan-card')}
         onSelectPage={handleSelectPage}
-        onOpenCharity={() => setIsCharityOpen(true)}
-        onOpenAuthModal={handleOpenAuthModal}
+        onOpenCharity={() =>
+          requireMemberSignup(
+            'Sign up or sign in to access Official Charity NGO donations and country relief support.',
+            () => setIsCharityOpen(true)
+          )
+        }
+        onOpenAuthModal={(tab) => handleOpenAuthModal(tab)}
         isMemberSignedIn={memberUser !== null}
       />
 
@@ -2594,18 +2839,29 @@ export default function App() {
       <MemberAuthModal
         isOpen={isAuthModalOpen}
         initialTab={authModalInitialTab}
+        gateNotice={authGateNotice}
         currentUser={memberUser}
         onUserUpdated={setMemberUser}
         onAccessGranted={(member, isNewRegistration) => {
+          const pending = pendingAuthActionRef.current;
+          pendingAuthActionRef.current = null;
+          setAuthGateNotice(null);
+
+          if (pending) {
+            window.setTimeout(() => {
+              pending();
+            }, 90);
+          }
+
           const toastId = `toast-auth-${Date.now()}`;
           setActivePushToast({
             id: toastId,
             title: isNewRegistration
-              ? 'Executive Member Account Active'
+              ? 'Full Platform Access Unlocked'
               : 'Member Access Verified',
             body: isNewRegistration
-              ? `Signed in as ${member.email || member.displayName || 'Member'}. Full platform access granted.`
-              : `Welcome back, ${member.displayName || member.email || 'Member'}. Your session is active.`,
+              ? `Welcome, ${member.displayName || member.email || 'Member'}. All platform features are now unlocked.`
+              : `Welcome back, ${member.displayName || member.email || 'Member'}. Full platform access is active.`,
             category: 'general',
           });
           if (pushToastTimerRef.current !== null) {
@@ -2615,7 +2871,11 @@ export default function App() {
             setActivePushToast((curr) => (curr?.id === toastId ? null : curr));
           }, 5000);
         }}
-        onClose={() => setIsAuthModalOpen(false)}
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          setAuthGateNotice(null);
+          pendingAuthActionRef.current = null;
+        }}
       />
 
       {/* Top Floating Mobile-Style Push Notification Toast */}
@@ -2623,7 +2883,10 @@ export default function App() {
         <div
           onClick={() => {
             setActivePushToast(null);
-            setIsInboxOpen(true);
+            requireMemberSignup(
+              'Sign up or sign in to open your Elon Musk Official In-App Inbox.',
+              () => setIsInboxOpen(true)
+            );
           }}
           role="status"
           aria-live="polite"
@@ -2661,16 +2924,18 @@ export default function App() {
 
       <OfflineIndicator />
 
-      {/* Floating Notification-Based Executive Chat Widget */}
-      <ExecutiveChatWidget
-        onOpenVipModal={() => handleOpenRsvp('christmas-fan-card')}
-        onOpenTeslaOrderModal={(v) => setOrderingVehicle(v || allVehicles[0])}
-        onAddOrderDirect={handleOrderCompleted}
-        onSubmitVipRequest={handleSubmitVipRequest}
-        soundEnabled={soundEnabled}
-        onToggleSound={handleToggleSoundAlerts}
-        phoneAlertsEnabled={phoneAlertsEnabled}
-      />
+      {/* Floating Notification-Based Executive Chat Widget (Signed-In Members Only) */}
+      {memberUser && (
+        <ExecutiveChatWidget
+          onOpenVipModal={() => handleOpenRsvp('christmas-fan-card')}
+          onOpenTeslaOrderModal={(v) => setOrderingVehicle(v || allVehicles[0])}
+          onAddOrderDirect={handleOrderCompleted}
+          onSubmitVipRequest={handleSubmitVipRequest}
+          soundEnabled={soundEnabled}
+          onToggleSound={handleToggleSoundAlerts}
+          phoneAlertsEnabled={phoneAlertsEnabled}
+        />
+      )}
     </div>
   );
 }

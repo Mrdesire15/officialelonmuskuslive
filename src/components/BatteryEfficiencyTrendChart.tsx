@@ -31,6 +31,9 @@ interface BatteryEfficiencyTrendChartProps {
   onToggleVehicleId: (vehicleId: string) => void;
   onSyncWithCompare?: () => void;
   performanceModeByVehicle: Record<string, boolean>;
+  isEmbeddedModal?: boolean;
+  focusedVehicle?: TeslaVehicle | null;
+  onTogglePerformanceMode?: (vehicleId: string) => void;
 }
 
 const SERIES_COLORS = [
@@ -112,8 +115,12 @@ export const BatteryEfficiencyTrendChart: React.FC<BatteryEfficiencyTrendChartPr
   onToggleVehicleId,
   onSyncWithCompare,
   performanceModeByVehicle,
+  isEmbeddedModal = false,
+  focusedVehicle = null,
+  onTogglePerformanceMode,
 }) => {
   const [metricMode, setMetricMode] = useState<TrendMetricMode>('health');
+  const idPrefix = isEmbeddedModal ? 'modal' : 'inline';
   const [hoverYear, setHoverYear] = useState<number | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(760);
 
@@ -313,7 +320,7 @@ export const BatteryEfficiencyTrendChart: React.FC<BatteryEfficiencyTrendChartPr
     const defs = svg.append('defs');
 
     activeSeriesList.forEach((series) => {
-      const areaGradId = `area-grad-${series.vehicle.id}`;
+      const areaGradId = `area-grad-${idPrefix}-${series.vehicle.id}`;
       const grad = defs
         .append('linearGradient')
         .attr('id', areaGradId)
@@ -397,25 +404,40 @@ export const BatteryEfficiencyTrendChart: React.FC<BatteryEfficiencyTrendChartPr
       .on('mouseleave', () => {
         setHoverYear(null);
       });
-  }, [activeSeriesList, metricMode, hoverYear, containerWidth, chartHeight, margin]);
+  }, [activeSeriesList, metricMode, hoverYear, containerWidth, chartHeight, margin, idPrefix]);
 
   const activeInspectionYear = hoverYear ?? 8;
+  const focusedPerfMode = focusedVehicle ? !!performanceModeByVehicle[focusedVehicle.id] : false;
 
   return (
-    <div className="mb-14 rounded-3xl bg-gradient-to-br from-[#08152f] via-[#061024] to-[#11122a] border border-blue-500/45 shadow-2xl overflow-hidden">
+    <div
+      className={
+        isEmbeddedModal
+          ? 'overflow-hidden'
+          : 'mb-14 rounded-3xl bg-gradient-to-br from-[#08152f] via-[#061024] to-[#11122a] border border-blue-500/45 shadow-2xl overflow-hidden'
+      }
+    >
       {/* Header & Controls */}
       <div className="p-5 sm:p-6 border-b border-blue-900/60 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-xs font-mono text-emerald-300 font-bold uppercase tracking-wider">
               <LineChart className="w-4 h-4 text-emerald-400" />
-              <span>D3.js Lifecycle Telemetry · Years 0–8 (Warranty Horizon)</span>
+              <span>
+                {focusedVehicle
+                  ? `Historical Battery Health Telemetry · ${focusedVehicle.modelCode}`
+                  : 'D3.js Lifecycle Telemetry · Years 0–8 (Warranty Horizon)'}
+              </span>
             </div>
-            <h3 className="font-display font-black text-2xl sm:text-3xl text-white tracking-tight">
-              Battery Health &amp; Efficiency Trends Over Time
+            <h3 className="font-display font-black text-xl sm:text-2xl text-white tracking-tight">
+              {focusedVehicle
+                ? `${focusedVehicle.name} · Historical Battery Health & Efficiency`
+                : 'Battery Health & Efficiency Trends Over Time'}
             </h3>
             <p className="text-xs sm:text-sm text-slate-300 font-light">
-              Select vehicle models below to compare projected 8-year pack retention (% SoH), driving range curves, and mi/kWh efficiency. Toggling <strong className="text-white">Performance Mode</strong> on any card dynamically updates its dashed track curve.
+              {focusedVehicle
+                ? 'Inspecting 8-year / 0–150k mi historical pack retention (% SoH), driving range, and mi/kWh efficiency. Toggle additional models below to overlay fleet comparisons.'
+                : 'Select vehicle models below to compare projected 8-year pack retention (% SoH), driving range curves, and mi/kWh efficiency. Toggling Performance Mode on any card dynamically updates its dashed track curve.'}
             </p>
           </div>
 
@@ -492,16 +514,35 @@ export const BatteryEfficiencyTrendChart: React.FC<BatteryEfficiencyTrendChartPr
             })}
           </div>
 
-          {onSyncWithCompare && (
-            <button
-              type="button"
-              onClick={onSyncWithCompare}
-              className="px-3 py-1.5 rounded-lg bg-[#040a18] hover:bg-[#0d2044] border border-blue-800/70 text-blue-200 hover:text-white text-[11px] font-mono flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
-            >
-              <RotateCcw className="w-3 h-3 text-blue-400" />
-              <span>Sync Compare Models</span>
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {focusedVehicle && onTogglePerformanceMode && (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={focusedPerfMode}
+                onClick={() => onTogglePerformanceMode(focusedVehicle.id)}
+                className={`px-3 py-1.5 rounded-lg border text-[11px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                  focusedPerfMode
+                    ? 'bg-gradient-to-r from-red-600 to-blue-600 border-red-400 text-white shadow-sm'
+                    : 'bg-[#040a18] hover:bg-[#0d2044] border-blue-800/70 text-blue-200'
+                }`}
+              >
+                <Flame className={`w-3.5 h-3.5 ${focusedPerfMode ? 'text-white' : 'text-red-400'}`} />
+                <span>Performance Mode: {focusedPerfMode ? 'ON' : 'OFF'}</span>
+              </button>
+            )}
+
+            {onSyncWithCompare && (
+              <button
+                type="button"
+                onClick={onSyncWithCompare}
+                className="px-3 py-1.5 rounded-lg bg-[#040a18] hover:bg-[#0d2044] border border-blue-800/70 text-blue-200 hover:text-white text-[11px] font-mono flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <RotateCcw className="w-3 h-3 text-blue-400" />
+                <span>Sync Compare Models</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

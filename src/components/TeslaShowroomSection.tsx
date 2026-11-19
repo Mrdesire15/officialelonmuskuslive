@@ -18,7 +18,8 @@ import {
   Trophy,
   Flame,
   ShoppingBag,
-  Package
+  Package,
+  LineChart
 } from 'lucide-react';
 import { TeslaVehicle, VehicleDetailedSpecs, PageId, MerchProduct } from '../types';
 import { TESLA_VEHICLES, getVehicleDetailedSpecs } from '../data/teslaVehicles';
@@ -232,6 +233,7 @@ interface BatteryHealthEfficiencyIndicatorProps {
   specs: VehicleDetailedSpecs;
   isPerfMode: boolean;
   onInspectBattery?: () => void;
+  onViewTrends?: () => void;
 }
 
 const BatteryHealthEfficiencyIndicator: React.FC<BatteryHealthEfficiencyIndicatorProps> = ({
@@ -239,6 +241,7 @@ const BatteryHealthEfficiencyIndicator: React.FC<BatteryHealthEfficiencyIndicato
   specs,
   isPerfMode,
   onInspectBattery,
+  onViewTrends,
 }) => {
   const metrics = getBatteryEfficiencyMetrics(vehicle, specs, isPerfMode);
   const gradientId = `battery-eff-grad-${vehicle.id}-${isPerfMode ? 'perf' : 'std'}`;
@@ -355,6 +358,17 @@ const BatteryHealthEfficiencyIndicator: React.FC<BatteryHealthEfficiencyIndicato
           </span>
         </div>
       </div>
+
+      {onViewTrends && (
+        <button
+          type="button"
+          onClick={onViewTrends}
+          className="w-full py-2 px-3 rounded-lg bg-[#08142b] hover:bg-emerald-600/20 border border-emerald-500/45 hover:border-emerald-400 text-emerald-200 hover:text-white text-[11px] font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+        >
+          <LineChart className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          <span>View Efficiency Trends</span>
+        </button>
+      )}
     </div>
   );
 };
@@ -387,6 +401,23 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
     'tesla-model-3-performance',
     'tesla-model-y-long-range',
   ]);
+  const [trendModalVehicle, setTrendModalVehicle] = useState<TeslaVehicle | null>(null);
+  const [modalTrendIds, setModalTrendIds] = useState<string[]>([]);
+
+  const openEfficiencyTrends = (vehicle: TeslaVehicle) => {
+    setTrendModalVehicle(vehicle);
+    setModalTrendIds([vehicle.id]);
+  };
+
+  const handleToggleModalTrendId = (vehicleId: string) => {
+    setModalTrendIds((prev) => {
+      if (prev.includes(vehicleId)) {
+        if (prev.length <= 1) return prev;
+        return prev.filter((id) => id !== vehicleId);
+      }
+      return [...prev, vehicleId];
+    });
+  };
 
   const handleToggleTrendVehicleId = (vehicleId: string) => {
     setTrendVehicleIds((prev) => {
@@ -842,6 +873,7 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
                       specs={haloVehicleSpecs}
                       isPerfMode={isHaloPerf}
                       onInspectBattery={() => openDossier(haloVehicle, 'battery')}
+                      onViewTrends={() => openEfficiencyTrends(haloVehicle)}
                     />
                   </div>
                 );
@@ -1578,6 +1610,7 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
                             specs={specs}
                             isPerfMode={isPerfMode}
                             onInspectBattery={() => openDossier(vehicle, 'battery')}
+                            onViewTrends={() => openEfficiencyTrends(vehicle)}
                           />
                         </div>
                       );
@@ -2038,6 +2071,89 @@ export const TeslaShowroomSection: React.FC<TeslaShowroomSectionProps> = ({
                 >
                   <Sliders className="w-3.5 h-3.5" />
                   <span>Configure Trim & Reserve Vehicle</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Vehicle-Specific D3.js Historical Battery Health & Efficiency Trends Modal */}
+      {trendModalVehicle && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#020611]/90 backdrop-blur-md p-3 sm:p-5 overflow-y-auto animate-fadeIn"
+          onClick={() => setTrendModalVehicle(null)}
+        >
+          <div
+            className="w-full max-w-5xl rounded-2xl bg-[#061024] border border-emerald-500/45 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-blue-900/60 flex items-center justify-between bg-gradient-to-r from-[#091630] via-[#0d1f44] to-[#0b2320]">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-blue-600 flex items-center justify-center text-white shadow-md shrink-0">
+                  <LineChart className="w-5 h-5 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-display font-bold text-base sm:text-xl text-white truncate">
+                    {trendModalVehicle.name}
+                  </h3>
+                  <p className="text-[11px] sm:text-xs font-mono text-emerald-300/90 truncate">
+                    {trendModalVehicle.modelCode} · Historical Battery Health &amp; Efficiency D3.js Telemetry
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setTrendModalVehicle(null)}
+                aria-label="Close efficiency trends modal"
+                className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-blue-900/50 transition-colors cursor-pointer shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Embedded D3.js Chart Body */}
+            <div className="overflow-y-auto flex-1">
+              <BatteryEfficiencyTrendChart
+                isEmbeddedModal
+                focusedVehicle={trendModalVehicle}
+                vehicles={allVehicles}
+                selectedVehicleIds={modalTrendIds}
+                onToggleVehicleId={handleToggleModalTrendId}
+                performanceModeByVehicle={performanceModeByVehicle}
+                onTogglePerformanceMode={toggleVehiclePerformanceMode}
+              />
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 sm:p-5 border-t border-blue-900/60 bg-[#040a18] flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-xs font-mono text-slate-300 tabular-nums">
+                Base Range: <strong className="text-white">{trendModalVehicle.range}</strong> · Warranty:{' '}
+                <strong className="text-emerald-300">
+                  {getVehicleDetailedSpecs(trendModalVehicle).warrantyBatteryDrive}
+                </strong>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setTrendModalVehicle(null)}
+                  className="px-4 py-2.5 rounded-xl bg-[#08142b] border border-blue-800/70 text-slate-300 hover:text-white text-xs font-mono cursor-pointer whitespace-nowrap"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = trendModalVehicle;
+                    setTrendModalVehicle(null);
+                    onSelectVehicleToOrder(target);
+                  }}
+                  className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 text-white font-bold text-xs font-mono shadow-lg cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap shrink-0"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>Configure &amp; Reserve Vehicle</span>
                 </button>
               </div>
             </div>

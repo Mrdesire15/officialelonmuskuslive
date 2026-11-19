@@ -176,6 +176,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               {PAGES_CONFIG.map((page) => {
                 const isActive = activePage === page.id;
+                const isLockedChapter = !currentUser && page.id !== 'executive';
                 return (
                   <button
                     key={page.id}
@@ -185,7 +186,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                         ? 'bg-gradient-to-r from-blue-600/40 via-blue-700/30 to-red-600/35 text-white border border-blue-400/70 shadow-md shadow-blue-600/20'
                         : 'text-slate-300 hover:text-white hover:bg-blue-950/70 border border-transparent'
                     }`}
-                    title={`${page.name} (${page.numberStr})`}
+                    title={
+                      isLockedChapter
+                        ? `${page.name} (${page.numberStr}) — Sign up to unlock`
+                        : `${page.name} (${page.numberStr})`
+                    }
                   >
                     {/* Number Badge */}
                     <span
@@ -207,6 +212,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <span className="font-medium tracking-wide">
                       {page.shortLabel}
                     </span>
+
+                    {isLockedChapter && (
+                      <Lock className="w-3 h-3 text-slate-400 group-hover:text-blue-300 shrink-0" aria-hidden="true" />
+                    )}
                   </button>
                 );
               })}
@@ -251,9 +260,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <Bell className="w-3.5 h-3.5 text-blue-300" />
                   )}
                   <span className="hidden xl:inline">Alerts</span>
-                  {!phoneNotificationsReady && (
-                    <span className="w-2 h-2 rounded-full bg-red-500" aria-hidden="true" />
-                  )}
                 </button>
               )}
 
@@ -350,18 +356,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               {onOpenAuthModal && (
                 <button
                   type="button"
-                  onClick={() => onOpenAuthModal('signin')}
+                  onClick={() => onOpenAuthModal(currentUser ? 'signin' : 'register')}
                   className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer shadow-sm whitespace-nowrap shrink-0 ${
                     currentUser
                       ? 'bg-[#08152e] border-emerald-500/45 text-emerald-200 hover:border-emerald-400 hover:text-white'
-                      : 'bg-[#08152e] border-blue-500/50 text-blue-100 hover:bg-blue-600/25 hover:border-blue-400 hover:text-white'
+                      : 'bg-blue-600/25 border-blue-400/70 text-white hover:bg-blue-600/40 hover:border-blue-300'
                   }`}
                   title={
                     currentUser
                       ? `Signed in as ${currentUser.email || 'Member'} (${
                           currentUser.emailVerified ? 'Verified' : 'Verification Pending'
                         })`
-                      : 'Register or Sign In with Email'
+                      : 'Sign Up or Sign In to Unlock Full Features'
                   }
                 >
                   {currentUser ? (
@@ -379,8 +385,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </>
                   ) : (
                     <>
-                      <UserPlus className="w-3.5 h-3.5 text-blue-300" />
-                      <span>Sign In</span>
+                      <UserPlus className="w-3.5 h-3.5 text-blue-200" />
+                      <span>Sign Up</span>
                     </>
                   )}
                 </button>
@@ -410,9 +416,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 ) : (
                   <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-300" />
                 )}
-                {!phoneNotificationsReady && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500" aria-hidden="true" />
-                )}
               </button>
             )}
 
@@ -432,14 +435,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             {onOpenAuthModal && (
               <button
                 type="button"
-                onClick={() => onOpenAuthModal('signin')}
+                onClick={() => onOpenAuthModal(currentUser ? 'signin' : 'register')}
                 className={`relative flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl border cursor-pointer shrink-0 whitespace-nowrap ${
                   currentUser
                     ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-200'
-                    : 'bg-[#08152e] border-blue-800/70 text-blue-100'
+                    : 'bg-blue-600/25 border-blue-400/70 text-white'
                 }`}
-                aria-label={currentUser ? 'Open Member Account' : 'Sign In with Email and Password'}
-                title={currentUser ? 'Member Account' : 'Sign In with Email & Password'}
+                aria-label={currentUser ? 'Open Member Account' : 'Sign Up to Unlock Full Features'}
+                title={currentUser ? 'Member Account' : 'Sign Up to Unlock Full Features'}
               >
                 {currentUser ? (
                   <>
@@ -450,8 +453,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </>
                 ) : (
                   <>
-                    <UserPlus className="hidden min-[400px]:inline-block w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-300" />
-                    <span>Sign In</span>
+                    <UserPlus className="hidden min-[400px]:inline-block w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-200" />
+                    <span>Sign Up</span>
                   </>
                 )}
               </button>
@@ -487,6 +490,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="grid grid-cols-1 gap-2">
             {PAGES_CONFIG.map((page) => {
               const isActive = activePage === page.id;
+              const isLockedChapter = !currentUser && page.id !== 'executive';
               return (
                 <button
                   key={page.id}
@@ -504,7 +508,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                       {page.numberStr}
                     </span>
                     <div>
-                      <div className="text-xs font-bold text-white">{page.name}</div>
+                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span>{page.name}</span>
+                        {isLockedChapter && <Lock className="w-3 h-3 text-blue-300 shrink-0" />}
+                      </div>
                       <div className="text-[10px] text-slate-400 font-mono">{page.commandDesc}</div>
                     </div>
                   </div>
@@ -563,13 +570,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  onOpenAuthModal('signin');
+                  onOpenAuthModal(currentUser ? 'signin' : 'register');
                   setMobileMenuOpen(false);
                 }}
                 className={`py-2.5 px-3 rounded-xl border text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 ${
                   currentUser
                     ? 'bg-emerald-500/15 border-emerald-500/45 text-emerald-200'
-                    : 'bg-blue-600/20 border-blue-500/50 text-blue-100'
+                    : 'bg-blue-600/25 border-blue-400/65 text-white'
                 }`}
               >
                 {currentUser ? (
@@ -581,8 +588,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </>
                 ) : (
                   <>
-                    <UserPlus className="w-3.5 h-3.5 text-blue-300" />
-                    <span>Member Registration &amp; Sign In</span>
+                    <UserPlus className="w-3.5 h-3.5 text-blue-200" />
+                    <span>Member Sign Up &amp; Unlock Features</span>
                   </>
                 )}
               </button>

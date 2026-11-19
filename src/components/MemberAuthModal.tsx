@@ -36,6 +36,7 @@ import {
 interface MemberAuthModalProps {
   isOpen: boolean;
   initialTab?: 'register' | 'signin';
+  gateNotice?: string | null;
   currentUser: MemberAccountSnapshot | null;
   onUserUpdated: (user: MemberAccountSnapshot | null) => void;
   onAccessGranted?: (user: MemberAccountSnapshot, isNewRegistration: boolean) => void;
@@ -44,7 +45,8 @@ interface MemberAuthModalProps {
 
 export const MemberAuthModal: React.FC<MemberAuthModalProps> = ({
   isOpen,
-  initialTab = 'signin',
+  initialTab = 'register',
+  gateNotice = null,
   currentUser,
   onUserUpdated,
   onAccessGranted,
@@ -56,6 +58,7 @@ export const MemberAuthModal: React.FC<MemberAuthModalProps> = ({
     <MemberAuthModalInner
       key={`${initialTab}-${currentUser?.uid || 'guest'}`}
       initialTab={initialTab}
+      gateNotice={gateNotice}
       currentUser={currentUser}
       onUserUpdated={onUserUpdated}
       onAccessGranted={onAccessGranted}
@@ -66,11 +69,12 @@ export const MemberAuthModal: React.FC<MemberAuthModalProps> = ({
 
 const MemberAuthModalInner: React.FC<{
   initialTab: 'register' | 'signin';
+  gateNotice?: string | null;
   currentUser: MemberAccountSnapshot | null;
   onUserUpdated: (user: MemberAccountSnapshot | null) => void;
   onAccessGranted?: (user: MemberAccountSnapshot, isNewRegistration: boolean) => void;
   onClose: () => void;
-}> = ({ initialTab, currentUser, onUserUpdated, onAccessGranted, onClose }) => {
+}> = ({ initialTab, gateNotice, currentUser, onUserUpdated, onAccessGranted, onClose }) => {
   const [mode, setMode] = useState<'register' | 'signin' | 'reset'>(initialTab);
 
   // Registration, Sign-In, & Recovery fields
@@ -333,16 +337,11 @@ const MemberAuthModalInner: React.FC<{
                 {currentUser
                   ? 'Executive Member Account'
                   : mode === 'register'
-                  ? 'Executive Member Registration'
+                  ? 'Member Sign Up'
                   : mode === 'signin'
-                  ? 'Executive Member Sign In'
+                  ? 'Member Sign In'
                   : 'Reset Member Password'}
               </h2>
-              <p className="text-xs text-blue-200/80 font-mono">
-                {currentUser
-                  ? 'Elon Musk Management · Encrypted Session Active'
-                  : 'Instant Encrypted Email & Password Access'}
-              </p>
             </div>
           </div>
 
@@ -358,6 +357,14 @@ const MemberAuthModalInner: React.FC<{
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+          {/* Gate Context Banner when visitor tries to open a full feature */}
+          {!currentUser && gateNotice && (
+            <div className="p-3.5 rounded-xl bg-blue-950/55 border border-blue-400/45 text-blue-100 text-xs flex items-start gap-2.5">
+              <ShieldCheck className="w-4 h-4 text-blue-300 shrink-0 mt-0.5" />
+              <span className="leading-relaxed">{gateNotice}</span>
+            </div>
+          )}
+
           {/* Status & Error Banners */}
           {errorMessage && (
             <div
@@ -457,31 +464,6 @@ const MemberAuthModalInner: React.FC<{
                 )}
               </div>
 
-              {/* Active Security Protections Summary */}
-              <div className="p-4 rounded-xl bg-[#040a18] border border-blue-900/60 space-y-2 text-xs">
-                <div className="text-[11px] font-mono uppercase tracking-wider text-blue-300 font-semibold">
-                  Active Security Safeguards
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-300">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span>Salted PBKDF2 credential hashing</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span>3-strike {LOCKOUT_DURATION_MINUTES}-minute login lockout</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span>Instant verified member session</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span>Zero database info exposed</span>
-                  </div>
-                </div>
-              </div>
-
               {/* Actions */}
               <div className="flex items-center justify-between gap-3 pt-2 border-t border-blue-900/60">
                 <button
@@ -504,20 +486,9 @@ const MemberAuthModalInner: React.FC<{
             </div>
           ) : (
             <>
-              {/* TAB SWITCHER (Email & Password Access / Full Registration) */}
+              {/* TAB SWITCHER (Sign Up / Sign In) */}
               {mode !== 'reset' && (
                 <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-[#040a18] border border-blue-900/70">
-                  <button
-                    type="button"
-                    onClick={() => switchMode('signin')}
-                    className={`py-2.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      mode === 'signin'
-                        ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white shadow'
-                        : 'text-slate-300 hover:text-white'
-                    }`}
-                  >
-                    Email &amp; Password
-                  </button>
                   <button
                     type="button"
                     onClick={() => switchMode('register')}
@@ -527,7 +498,18 @@ const MemberAuthModalInner: React.FC<{
                         : 'text-slate-300 hover:text-white'
                     }`}
                   >
-                    Full Registration
+                    Sign Up
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => switchMode('signin')}
+                    className={`py-2.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      mode === 'signin'
+                        ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white shadow'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    Sign In
                   </button>
                 </div>
               )}
@@ -694,7 +676,7 @@ const MemberAuthModalInner: React.FC<{
                     disabled={isSubmitting}
                     className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 disabled:opacity-50 text-white text-xs font-bold tracking-wide shadow-lg shadow-blue-600/20 cursor-pointer"
                   >
-                    {isSubmitting ? 'Creating Encrypted Account...' : 'Create Executive Member Account'}
+                    {isSubmitting ? 'Creating Encrypted Account...' : 'Sign Up & Unlock Full Access'}
                   </button>
 
                   <p className="text-[11px] text-slate-400 text-center leading-relaxed">
@@ -785,11 +767,11 @@ const MemberAuthModalInner: React.FC<{
                     disabled={isSubmitting}
                     className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 disabled:opacity-50 text-white text-xs font-bold tracking-wide shadow-lg shadow-blue-600/20 cursor-pointer"
                   >
-                    {isSubmitting ? 'Verifying & Granting Access...' : 'Sign In & Access Platform'}
+                    {isSubmitting ? 'Verifying & Granting Access...' : 'Sign In & Unlock Platform'}
                   </button>
 
                   <p className="text-[11px] text-slate-400 text-center leading-relaxed">
-                    Existing members sign in and new emails register automatically upon submission. Three consecutive incorrect password attempts lock access for {LOCKOUT_DURATION_MINUTES} minutes.
+                    New visitor? Switch to the <button type="button" onClick={() => switchMode('register')} className="text-blue-300 hover:text-white font-semibold underline cursor-pointer">Sign Up</button> tab to register. Three consecutive incorrect password attempts lock access for {LOCKOUT_DURATION_MINUTES} minutes.
                   </p>
                 </form>
               )}
