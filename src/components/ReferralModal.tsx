@@ -23,6 +23,7 @@ interface ReferralModalProps {
   visitorReferralCode: string;
   commissionPercent: number;
   conversions: ReferralConversion[];
+  onOpenMemberDashboard?: () => void;
 }
 
 export const ReferralModal: React.FC<ReferralModalProps> = ({
@@ -31,6 +32,7 @@ export const ReferralModal: React.FC<ReferralModalProps> = ({
   visitorReferralCode,
   commissionPercent,
   conversions,
+  onOpenMemberDashboard,
 }) => {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -152,6 +154,16 @@ export const ReferralModal: React.FC<ReferralModalProps> = ({
                   {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4 text-blue-300" />}
                   <span>{copiedLink ? 'Invite Link Copied' : 'Copy Referral Link'}</span>
                 </button>
+                {onOpenMemberDashboard && (
+                  <button
+                    type="button"
+                    onClick={onOpenMemberDashboard}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600/20 border border-emerald-500/50 hover:bg-emerald-600/35 text-emerald-200 hover:text-white text-xs font-bold flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    <Percent className="w-4 h-4 text-emerald-300" />
+                    <span>Open Member Dashboard</span>
+                  </button>
+                )}
               </div>
             </div>
 

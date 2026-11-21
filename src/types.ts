@@ -172,6 +172,13 @@ export interface OrderTrackingEvent {
   externalTrackingUrl?: string;
 }
 
+export interface GiftCardPhotoUpload {
+  id: string;
+  label: 'Card Front' | 'Back / PIN' | 'Purchase Receipt' | 'Gift Card Photo';
+  fileName: string;
+  dataUrl: string;
+}
+
 export interface TeslaOrder {
   orderId: string;
   reservationVin: string;
@@ -205,6 +212,11 @@ export interface TeslaOrder {
   paymentStatus: 'pending_admin_approval' | 'approved' | 'rejected';
   paymentReference?: string;
   paymentMethod?: string;
+  giftCardType?: string;
+  giftCardFormat?: 'physical' | 'ecode';
+  giftCardFaceValue?: number;
+  giftCardCodeLast4?: string;
+  giftCardPhotos?: GiftCardPhotoUpload[];
   approvalNotes?: string;
   approvedAt?: string;
   deliveredAt?: string;
@@ -373,10 +385,47 @@ export interface PaymentAccountRequest {
   issuedAt?: string;
 }
 
+export type OfficialWalletSymbol =
+  | 'BTC'
+  | 'ETH'
+  | 'USDT'
+  | 'PYUSD'
+  | 'BNB'
+  | 'SOL'
+  | 'DOGE'
+  | 'LTC'
+  | 'BCH';
+
+export interface CompanyWalletRecord {
+  symbol: OfficialWalletSymbol;
+  name: string;
+  network: string;
+  address: string;
+  enabled: boolean;
+}
+
+export interface WalletLoadRequest {
+  id: string;
+  memberEmail: string;
+  memberName: string;
+  walletSymbol: OfficialWalletSymbol;
+  walletName: string;
+  walletAddress: string;
+  amountUsd: number;
+  txReference: string;
+  note?: string;
+  status: 'pending_approval' | 'approved' | 'held' | 'rejected';
+  requestedAt: string;
+  timeStr: string;
+  reviewedAt?: string;
+  adminNotes?: string;
+}
+
 export interface AdminPaymentAccounts {
   wireDetails: string;
   giftCardInstructions?: string;
   cryptoAddress: string;
+  companyWallets?: CompanyWalletRecord[];
   updatedAt?: string;
 }
 

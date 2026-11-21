@@ -15,7 +15,10 @@ import {
   Building,
   Lock
 } from 'lucide-react';
-import { TeslaShareOrder } from '../types';
+import { AdminPaymentAccounts, OfficialWalletSymbol, TeslaShareOrder } from '../types';
+import { mergeCompanyWallets } from '../data/officialWallets';
+import { OfficialWalletsSelector } from './OfficialWalletsSelector';
+import { CryptoPaymentConfirmBox } from './CryptoPaymentConfirmBox';
 
 interface TeslaSharePurchaseModalProps {
   isOpen: boolean;
@@ -28,6 +31,7 @@ interface TeslaSharePurchaseModalProps {
   commissionPercent?: number;
   defaultInvestorName?: string;
   defaultInvestorEmail?: string;
+  adminPaymentAccounts?: AdminPaymentAccounts;
 }
 
 export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = ({
@@ -41,6 +45,7 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
   commissionPercent = 5,
   defaultInvestorName = '',
   defaultInvestorEmail = '',
+  adminPaymentAccounts,
 }) => {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
@@ -64,6 +69,9 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
 
   // Payment method
   const [paymentMethod, setPaymentMethod] = useState<'wire' | 'ach' | 'crypto'>('wire');
+  const [selectedCryptoSymbol, setSelectedCryptoSymbol] = useState<OfficialWalletSymbol>('BTC');
+  const [cryptoPaymentConfirmed, setCryptoPaymentConfirmed] = useState<boolean>(false);
+  const [cryptoTxHash, setCryptoTxHash] = useState<string>('');
   const [bankRouting, setBankRouting] = useState('');
   const [bankAccount, setBankAccount] = useState('');
   const [referralCodeInput, setReferralCodeInput] = useState(defaultReferralCode);
@@ -93,6 +101,7 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
 
   const handleFinalSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (paymentMethod === 'crypto' && !cryptoPaymentConfirmed) return;
 
     const certNum = `TSLA-DRS-2026-${Math.floor(100000 + Math.random() * 900000)}`;
     const normalizedRef = referralCodeInput.trim().toUpperCase();
@@ -499,7 +508,10 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => setPaymentMethod('wire')}
+                    onClick={() => {
+                      setPaymentMethod('wire');
+                      setCryptoPaymentConfirmed(false);
+                    }}
                     className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
                       paymentMethod === 'wire'
                         ? 'bg-blue-600/25 border-blue-400 text-blue-100'
@@ -512,7 +524,10 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
 
                   <button
                     type="button"
-                    onClick={() => setPaymentMethod('ach')}
+                    onClick={() => {
+                      setPaymentMethod('ach');
+                      setCryptoPaymentConfirmed(false);
+                    }}
                     className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
                       paymentMethod === 'ach'
                         ? 'bg-blue-600/25 border-blue-400 text-blue-100'
@@ -532,8 +547,8 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
                         : 'bg-[#08142b] border-blue-900/70 text-slate-300'
                     }`}
                   >
-                    <div className="text-xs font-bold text-white mb-0.5">Treasury Crypto</div>
-                    <div className="text-[10px]">USDC / BTC / DOGE treasury escrow settlement.</div>
+                    <div className="text-xs font-bold text-white mb-0.5">Official Crypto &amp; PYUSD</div>
+                    <div className="text-[10px]">BTC, ETH, USDT, PYUSD, BNB, SOL, DOGE, LTC, BCH.</div>
                   </button>
                 </div>
               </div>
@@ -584,14 +599,24 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
               )}
 
               {paymentMethod === 'crypto' && (
-                <div className="p-3 rounded-xl bg-[#040a18] border border-blue-900/70 space-y-1 text-xs font-mono">
-                  <span className="text-[10px] text-slate-300 uppercase">USDC / USDT Treasury Contract</span>
-                  <div className="text-xs text-blue-300 font-bold truncate">
-                    0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
-                  </div>
-                  <p className="text-[10px] text-slate-400">
-                    Network: Ethereum Mainnet or Solana (USDC). Transaction hash automatically logged with your order.
-                  </p>
+                <div className="space-y-3">
+                  <OfficialWalletsSelector
+                    wallets={mergeCompanyWallets(adminPaymentAccounts?.companyWallets)}
+                    selectedSymbol={selectedCryptoSymbol}
+                    onSelectSymbol={(sym) => {
+                      setSelectedCryptoSymbol(sym);
+                      setCryptoPaymentConfirmed(false);
+                    }}
+                    compact
+                  />
+                  <CryptoPaymentConfirmBox
+                    amountUsd={totalInvestment}
+                    walletSymbol={selectedCryptoSymbol}
+                    confirmed={cryptoPaymentConfirmed}
+                    onConfirmChange={setCryptoPaymentConfirmed}
+                    txHash={cryptoTxHash}
+                    onTxHashChange={setCryptoTxHash}
+                  />
                 </div>
               )}
 
@@ -624,10 +649,15 @@ export const TeslaSharePurchaseModal: React.FC<TeslaSharePurchaseModalProps> = (
                 </button>
                 <button
                   type="submit"
-                  className="px-7 py-3 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 text-white font-bold text-xs shadow-xl cursor-pointer flex items-center gap-2 transition-transform active:scale-95"
+                  disabled={paymentMethod === 'crypto' && !cryptoPaymentConfirmed}
+                  className="px-7 py-3 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-xs shadow-xl cursor-pointer flex items-center gap-2 transition-transform active:scale-95"
                 >
                   <Check className="w-4 h-4 stroke-[3]" />
-                  <span>Execute TSLA Share Allocation</span>
+                  <span>
+                    {paymentMethod === 'crypto' && !cryptoPaymentConfirmed
+                      ? `Confirm ${selectedCryptoSymbol} Payment Above to Proceed`
+                      : 'Execute TSLA Share Allocation'}
+                  </span>
                 </button>
               </div>
             </form>

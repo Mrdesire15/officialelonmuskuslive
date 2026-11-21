@@ -31,8 +31,17 @@ import {
   CharitySupportRequest,
   CrisisCategory,
   PaymentAccountRequest,
+  OfficialWalletSymbol,
 } from '../types';
-import { CHARITY_NGO_SECTIONS, CONTINENT_RELIEF_HUBS, CRISIS_COUNTRIES } from '../data/charityData';
+import {
+  CHARITY_FIELD_PHOTOS,
+  CHARITY_NGO_SECTIONS,
+  CONTINENT_RELIEF_HUBS,
+  CRISIS_COUNTRIES,
+} from '../data/charityData';
+import { mergeCompanyWallets } from '../data/officialWallets';
+import { OfficialWalletsSelector } from './OfficialWalletsSelector';
+import { CryptoPaymentConfirmBox } from './CryptoPaymentConfirmBox';
 import { CharityReliefGlobe } from './CharityReliefGlobe';
 
 interface CharityDonationModalProps {
@@ -99,6 +108,9 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
   const quickCustomInputRef = useRef<HTMLInputElement | null>(null);
   const formCustomInputRef = useRef<HTMLInputElement | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'wire' | 'gift_card' | 'crypto'>('wire');
+  const [selectedCryptoSymbol, setSelectedCryptoSymbol] = useState<OfficialWalletSymbol>('BTC');
+  const [cryptoPaymentConfirmed, setCryptoPaymentConfirmed] = useState<boolean>(false);
+  const [cryptoTxHash, setCryptoTxHash] = useState<string>('');
   const [accountRequestNote, setAccountRequestNote] = useState<string>('');
   const [copiedAccount, setCopiedAccount] = useState<boolean>(false);
   const [donorName, setDonorName] = useState<string>('');
@@ -229,9 +241,10 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
   const handleDonationSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!donorName.trim() || !donorEmail.trim() || donationAmount <= 0) return;
+    if (paymentMethod === 'crypto' && !cryptoPaymentConfirmed) return;
 
     const now = new Date();
-    const prefix = paymentMethod === 'wire' ? 'WIRE' : paymentMethod === 'gift_card' ? 'GIFT' : 'CRYPTO';
+    const prefix = paymentMethod === 'wire' ? 'WIRE' : paymentMethod === 'gift_card' ? 'GIFT' : selectedCryptoSymbol;
     const newDonation: CharityDonationRequest = {
       donationId: `MUSK-NGO-${Date.now().toString().slice(-6)}`,
       ngoSectionId: selectedNgo.id,
@@ -241,7 +254,10 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
       crisisType: selectedCountry.crisisType,
       amountUsd: donationAmount,
       paymentMethod,
-      paymentReference: `CHAR-${prefix}-${Date.now().toString().slice(-5)}`,
+      paymentReference:
+        paymentMethod === 'crypto' && cryptoTxHash.trim()
+          ? `CHAR-${selectedCryptoSymbol}-${cryptoTxHash.trim()}`
+          : `CHAR-${prefix}-${Date.now().toString().slice(-5)}`,
       donorName: donorName.trim(),
       donorEmail: donorEmail.trim(),
       donorCountry: donorCountry.trim() || undefined,
@@ -1042,6 +1058,58 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                   </span>
                 </div>
 
+                {/* Verified Real Field Operations Gallery (Heal the World) */}
+                <div className="p-4 rounded-2xl bg-[#040a18] border border-blue-900/70 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-[11px] font-mono text-emerald-300 uppercase tracking-wider font-bold">
+                        Heal the World · Live Field Relief Photography
+                      </div>
+                      <h5 className="text-xs font-bold text-white">
+                        On-the-Ground Food &amp; Humanitarian Distribution Missions
+                      </h5>
+                    </div>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      4 Active Relief Field Reports
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {CHARITY_FIELD_PHOTOS.map((photo) => {
+                      const imgFailed = !!failedImgKeys[photo.id];
+                      return (
+                        <div
+                          key={photo.id}
+                          className="rounded-xl bg-[#08142b] border border-blue-900/60 overflow-hidden flex flex-col"
+                        >
+                          <div className="relative aspect-[4/3] w-full bg-[#061024] overflow-hidden">
+                            {!imgFailed ? (
+                              <img
+                                src={photo.src}
+                                alt={photo.title}
+                                referrerPolicy="no-referrer"
+                                onError={() => markImgFailed(photo.id)}
+                                className="w-full h-full object-cover object-[center_22%]"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gradient-to-br from-[#0a1d42] to-[#1e0b18] flex items-center justify-center">
+                                <HeartHandshake className="w-6 h-6 text-blue-300/70" />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#040a18]/85 via-transparent to-transparent" />
+                            <div className="absolute bottom-2 left-2.5 right-2.5 text-[10px] font-mono text-emerald-300 truncate">
+                              {photo.region}
+                            </div>
+                          </div>
+                          <div className="p-2.5 text-[11px] font-semibold text-white leading-snug">
+                            {photo.title}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* 3D Interactive D3.js Humanitarian Operations Globe */}
                 <CharityReliefGlobe
                   selectedCountryId={selectedCountryId}
@@ -1076,7 +1144,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                               alt={`${hub.continentName} humanitarian relief operations`}
                               referrerPolicy="no-referrer"
                               onError={() => markImgFailed(hub.id)}
-                              className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                              className="w-full h-full object-cover object-[center_22%] group-hover:scale-105 transition-transform duration-500"
                             />
                           ) : (
                             <div className="w-full h-full bg-gradient-to-br from-[#0a1d42] to-[#1e0b18] flex items-center justify-center">
@@ -1181,7 +1249,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                                 alt={`${country.name} humanitarian aid mission`}
                                 referrerPolicy="no-referrer"
                                 onError={() => markImgFailed(`country-${country.id}`)}
-                                className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                                className="w-full h-full object-cover object-[center_22%] group-hover:scale-105 transition-transform duration-500"
                               />
                             ) : (
                               <div className="w-full h-full bg-gradient-to-br from-[#0b1f44] to-[#230c18] flex items-center justify-center">
@@ -1239,7 +1307,7 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                         alt={`${selectedCountry.name} active humanitarian deployment`}
                         referrerPolicy="no-referrer"
                         onError={() => markImgFailed(`spotlight-${selectedCountry.id}`)}
-                        className="w-full h-full object-cover object-center"
+                        className="w-full h-full object-cover object-[center_22%]"
                       />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-[#0b1f44] to-[#230c18] flex items-center justify-center">
@@ -1321,7 +1389,10 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <button
                           type="button"
-                          onClick={() => setPaymentMethod('wire')}
+                          onClick={() => {
+                            setPaymentMethod('wire');
+                            setCryptoPaymentConfirmed(false);
+                          }}
                           className={`py-2.5 px-3 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
                             paymentMethod === 'wire'
                               ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white border-blue-400'
@@ -1332,7 +1403,10 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                         </button>
                         <button
                           type="button"
-                          onClick={() => setPaymentMethod('gift_card')}
+                          onClick={() => {
+                            setPaymentMethod('gift_card');
+                            setCryptoPaymentConfirmed(false);
+                          }}
                           className={`py-2.5 px-3 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
                             paymentMethod === 'gift_card'
                               ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white border-blue-400'
@@ -1350,12 +1424,34 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                               : 'bg-[#08142b] border-blue-900/70 text-slate-300'
                           }`}
                         >
-                          Bitcoin / Doge / USDC
+                          Official Crypto &amp; PayPal USD
                         </button>
                       </div>
 
+                      {paymentMethod === 'crypto' && (
+                        <div className="space-y-3">
+                          <OfficialWalletsSelector
+                            wallets={mergeCompanyWallets(adminPaymentAccounts?.companyWallets)}
+                            selectedSymbol={selectedCryptoSymbol}
+                            onSelectSymbol={(sym) => {
+                              setSelectedCryptoSymbol(sym);
+                              setCryptoPaymentConfirmed(false);
+                            }}
+                            compact
+                          />
+                          <CryptoPaymentConfirmBox
+                            amountUsd={donationAmount}
+                            walletSymbol={selectedCryptoSymbol}
+                            confirmed={cryptoPaymentConfirmed}
+                            onConfirmChange={setCryptoPaymentConfirmed}
+                            txHash={cryptoTxHash}
+                            onTxHashChange={setCryptoTxHash}
+                          />
+                        </div>
+                      )}
+
                       {/* Admin-provisioned Account Gate */}
-                      {activeAdminAccount ? (
+                      {paymentMethod === 'crypto' && !issuedRequest?.issuedAccountDetails?.trim() ? null : activeAdminAccount ? (
                         <div className="p-3.5 rounded-xl bg-[#08142b] border border-emerald-500/45 text-xs space-y-2">
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-semibold text-white flex items-center gap-1.5">
@@ -1489,10 +1585,15 @@ export const CharityDonationModal: React.FC<CharityDonationModalProps> = ({
                     </div>
                     <button
                       type="submit"
-                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap shrink-0 shadow-md"
+                      disabled={paymentMethod === 'crypto' && !cryptoPaymentConfirmed}
+                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 disabled:opacity-45 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap shrink-0 shadow-md"
                     >
                       <HeartHandshake className="w-4 h-4" />
-                      <span>Submit ${donationAmount.toLocaleString()} Donation to Elon Musk Management</span>
+                      <span>
+                        {paymentMethod === 'crypto' && !cryptoPaymentConfirmed
+                          ? `Confirm ${selectedCryptoSymbol} Payment Above to Proceed`
+                          : `Submit $${donationAmount.toLocaleString()} Donation to Elon Musk Management`}
+                      </span>
                     </button>
                   </div>
                 </form>

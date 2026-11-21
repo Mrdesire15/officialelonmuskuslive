@@ -1,10 +1,36 @@
 import { CharityNgoSection, ContinentReliefHub, CrisisCountry } from '../types';
-import globalReliefImg from '../assets/images/charity_global_relief_1794733792215.jpg';
-import europeAidImg from '../assets/images/charity_europe_aid_1794733793539.jpg';
-import middleEastAidImg from '../assets/images/charity_middle_east_aid_1794733793787.jpg';
-import africaAidImg from '../assets/images/charity_africa_aid_1794733793385.jpg';
-import asiaAidImg from '../assets/images/charity_asia_aid_1794733794005.jpg';
-import americasAidImg from '../assets/images/charity_americas_aid_1794733794960.jpg';
+
+const healFoodSacksImg = '/assets/aistudio/HEAL_35f9291a.jpg';
+const healShelterMealsImg = '/assets/aistudio/HE_a9d483db.jpg';
+const healUrbanReliefImg = '/assets/aistudio/HGZ_b4996a24.jpg';
+const healCampReliefImg = '/assets/aistudio/GAZX_6e6c9493.jpg';
+
+export const CHARITY_FIELD_PHOTOS = [
+  {
+    id: 'field-heal-sacks',
+    src: healFoodSacksImg,
+    title: 'Direct Grain & Family Ration Sacks',
+    region: 'East & Horn of Africa',
+  },
+  {
+    id: 'field-heal-meals',
+    src: healShelterMealsImg,
+    title: 'Community Shelter Kitchen & Nutrition Aid',
+    region: 'Sub-Saharan & Rural Zones',
+  },
+  {
+    id: 'field-heal-urban',
+    src: healUrbanReliefImg,
+    title: 'Frontline Urban Emergency Food Dispatch',
+    region: 'Middle East & Conflict Corridors',
+  },
+  {
+    id: 'field-heal-camp',
+    src: healCampReliefImg,
+    title: 'Displaced Tent-Camp Relief Distribution',
+    region: 'Global Humanitarian Camps',
+  },
+] as const;
 
 export const CONTINENT_RELIEF_HUBS: ContinentReliefHub[] = [
   {
@@ -12,7 +38,7 @@ export const CONTINENT_RELIEF_HUBS: ContinentReliefHub[] = [
     continentName: 'Global Rapid Airlift',
     region: 'Global',
     centerCoords: [-20, 20],
-    image: globalReliefImg,
+    image: healCampReliefImg,
     reliefSummary: 'Multi-continent rapid medical cargo, Starlink dishes, and solar emergency reserves.',
     flagshipOperations: 'Worldwide Emergency Dispatch',
   },
@@ -21,7 +47,7 @@ export const CONTINENT_RELIEF_HUBS: ContinentReliefHub[] = [
     continentName: 'Europe & Eurasia',
     region: 'Europe & Eurasia',
     centerCoords: [32, 48],
-    image: europeAidImg,
+    image: healUrbanReliefImg,
     reliefSummary: 'Winter hospital Powerwalls, Starlink connectivity & displaced civilian housing corridors.',
     flagshipOperations: 'Ukraine · Armenia',
   },
@@ -30,7 +56,7 @@ export const CONTINENT_RELIEF_HUBS: ContinentReliefHub[] = [
     continentName: 'Middle East (West Asia)',
     region: 'Middle East',
     centerCoords: [42, 30],
-    image: middleEastAidImg,
+    image: healUrbanReliefImg,
     reliefSummary: 'Trauma surgery field hospitals, solar desalination & critical civilian survival kits.',
     flagshipOperations: 'Palestine · Lebanon · Syria · Yemen · Iraq',
   },
@@ -39,7 +65,7 @@ export const CONTINENT_RELIEF_HUBS: ContinentReliefHub[] = [
     continentName: 'Africa',
     region: 'Africa',
     centerCoords: [20, 5],
-    image: africaAidImg,
+    image: healFoodSacksImg,
     reliefSummary: 'Clean solar water stations, famine airlifts & anti-terrorism displacement protection.',
     flagshipOperations: 'Sudan · DRC · Somalia · Nigeria · Sahel · Ethiopia',
   },
@@ -48,7 +74,7 @@ export const CONTINENT_RELIEF_HUBS: ContinentReliefHub[] = [
     continentName: 'Asia-Pacific',
     region: 'Asia-Pacific',
     centerCoords: [78, 28],
-    image: asiaAidImg,
+    image: healCampReliefImg,
     reliefSummary: 'Mobile trauma clinics, flood-and-insurgency shelters & off-grid cold-chain medical units.',
     flagshipOperations: 'Myanmar · Afghanistan · Pakistan',
   },
@@ -57,7 +83,7 @@ export const CONTINENT_RELIEF_HUBS: ContinentReliefHub[] = [
     continentName: 'Americas',
     region: 'Americas',
     centerCoords: [-74, 12],
-    image: americasAidImg,
+    image: healShelterMealsImg,
     reliefSummary: 'Diesel-free hospital solar backups, emergency food drops & rural telemedicine Starlink hubs.',
     flagshipOperations: 'Haiti · Colombia',
   },
@@ -119,7 +145,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Multi-region medical airlifts, Starlink connectivity, solar microgrids & emergency food.',
     activeNgoSectionId: 'musk-foundation-relief',
     displacedEstimate: 'All Active Zones Worldwide',
-    image: globalReliefImg,
+    image: healCampReliefImg,
   },
   {
     id: 'ukraine',
@@ -134,7 +160,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Grid-resilient Powerwall hospital backups, Starlink emergency kits, winter heating & trauma aid.',
     activeNgoSectionId: 'starlink-ngo-corps',
     displacedEstimate: '3.7M+ internally displaced · 6.5M+ refugees',
-    image: europeAidImg,
+    image: healUrbanReliefImg,
   },
   {
     id: 'palestine-gaza',
@@ -149,7 +175,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Emergency trauma surgery supplies, solar-powered desalination water units, food & medical tents.',
     activeNgoSectionId: 'musk-foundation-relief',
     displacedEstimate: '1.9M+ displaced civilians',
-    image: middleEastAidImg,
+    image: healUrbanReliefImg,
   },
   {
     id: 'sudan',
@@ -164,7 +190,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Famine prevention food airlifts, cholera clean water stations, field clinics & camp connectivity.',
     activeNgoSectionId: 'youth-food-reconstruction',
     displacedEstimate: '11M+ displaced civilians',
-    image: africaAidImg,
+    image: healFoodSacksImg,
   },
   {
     id: 'lebanon',
@@ -179,7 +205,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Emergency shelter kits, solar clinic power backups, essential medications & displaced family grants.',
     activeNgoSectionId: 'tesla-solar-microgrid',
     displacedEstimate: '1.2M+ conflict-affected civilians',
-    image: middleEastAidImg,
+    image: healCampReliefImg,
   },
   {
     id: 'syria',
@@ -194,7 +220,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Hospital reconstruction, winter shelter insulation, clean water restoration & orthopedic clinics.',
     activeNgoSectionId: 'musk-foundation-relief',
     displacedEstimate: '7.2M+ internally displaced',
-    image: middleEastAidImg,
+    image: healCampReliefImg,
   },
   {
     id: 'yemen',
@@ -209,7 +235,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Severe malnutrition therapeutic food, solar water pumping stations & maternal health clinics.',
     activeNgoSectionId: 'youth-food-reconstruction',
     displacedEstimate: '4.5M+ displaced citizens',
-    image: middleEastAidImg,
+    image: healUrbanReliefImg,
   },
   {
     id: 'drc',
@@ -224,7 +250,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Eastern displacement camp sanitation, emergency pediatric clinics & satellite medical coordination.',
     activeNgoSectionId: 'musk-foundation-relief',
     displacedEstimate: '7.3M+ displaced in eastern provinces',
-    image: africaAidImg,
+    image: healShelterMealsImg,
   },
   {
     id: 'somalia',
@@ -239,7 +265,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Anti-terror displacement shelter aid, drought-resilient solar wells & mobile trauma ambulances.',
     activeNgoSectionId: 'tesla-solar-microgrid',
     displacedEstimate: '3.8M+ displaced by insurgency & crisis',
-    image: africaAidImg,
+    image: healFoodSacksImg,
   },
   {
     id: 'nigeria',
@@ -254,7 +280,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Safe displaced-youth schools, terrorism survivor rehabilitation, clinics & rural satellite links.',
     activeNgoSectionId: 'youth-food-reconstruction',
     displacedEstimate: '3.3M+ displaced by terrorism',
-    image: africaAidImg,
+    image: healShelterMealsImg,
   },
   {
     id: 'burkina-faso',
@@ -269,7 +295,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Blockaded-town emergency food convoys, solar borehole water & field medical outposts.',
     activeNgoSectionId: 'youth-food-reconstruction',
     displacedEstimate: '2.1M+ internally displaced',
-    image: africaAidImg,
+    image: healFoodSacksImg,
   },
   {
     id: 'mali',
@@ -284,7 +310,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Emergency grain reserves, off-grid maternity solar kits & rural health clinic telemetry.',
     activeNgoSectionId: 'tesla-solar-microgrid',
     displacedEstimate: '400K+ displaced civilians',
-    image: africaAidImg,
+    image: healShelterMealsImg,
   },
   {
     id: 'niger',
@@ -299,7 +325,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Border-zone refugee relief, emergency nutrition parcels & solar water purification.',
     activeNgoSectionId: 'youth-food-reconstruction',
     displacedEstimate: '430K+ displaced & host families',
-    image: africaAidImg,
+    image: healFoodSacksImg,
   },
   {
     id: 'myanmar',
@@ -314,7 +340,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Mobile jungle clinics, emergency medical cold-chain power, food aid & displaced schooling.',
     activeNgoSectionId: 'starlink-ngo-corps',
     displacedEstimate: '3.4M+ internally displaced',
-    image: asiaAidImg,
+    image: healShelterMealsImg,
   },
   {
     id: 'afghanistan',
@@ -329,7 +355,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Winter survival food & fuel grants, maternal clinics, terrorism-victim medical aid & schooling.',
     activeNgoSectionId: 'musk-foundation-relief',
     displacedEstimate: '6.3M+ internally displaced & returnees',
-    image: asiaAidImg,
+    image: healCampReliefImg,
   },
   {
     id: 'iraq',
@@ -344,7 +370,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Post-terrorism clinic rebuilding, trauma counseling centers & solar microgrids for villages.',
     activeNgoSectionId: 'tesla-solar-microgrid',
     displacedEstimate: '1.1M+ recovering families',
-    image: middleEastAidImg,
+    image: healUrbanReliefImg,
   },
   {
     id: 'ethiopia',
@@ -359,7 +385,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Post-conflict clinic restocking, emergency food aid, clean water systems & school rebuilding.',
     activeNgoSectionId: 'youth-food-reconstruction',
     displacedEstimate: '4.4M+ internally displaced',
-    image: africaAidImg,
+    image: healFoodSacksImg,
   },
   {
     id: 'mozambique',
@@ -374,7 +400,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Displaced coastal community shelter, malaria & trauma kits & emergency solar lighting.',
     activeNgoSectionId: 'musk-foundation-relief',
     displacedEstimate: '700K+ affected by insurgency',
-    image: africaAidImg,
+    image: healShelterMealsImg,
   },
   {
     id: 'haiti',
@@ -389,7 +415,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Hospital diesel-free solar backup power, emergency surgical kits, clean water & food relief.',
     activeNgoSectionId: 'tesla-solar-microgrid',
     displacedEstimate: '700K+ displaced by armed violence',
-    image: americasAidImg,
+    image: healFoodSacksImg,
   },
   {
     id: 'south-sudan',
@@ -404,7 +430,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Border refugee camp medical stations, Starlink triage links & emergency nutrition.',
     activeNgoSectionId: 'starlink-ngo-corps',
     displacedEstimate: '2.2M+ internally displaced',
-    image: africaAidImg,
+    image: healShelterMealsImg,
   },
   {
     id: 'armenia',
@@ -419,7 +445,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Winter housing grants, pediatric medical care & displaced-family livelihood equipment.',
     activeNgoSectionId: 'youth-food-reconstruction',
     displacedEstimate: '115K+ forcibly displaced civilians',
-    image: europeAidImg,
+    image: healCampReliefImg,
   },
   {
     id: 'pakistan',
@@ -434,7 +460,7 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Emergency trauma stabilization clinics, solar water purification & displaced family shelter.',
     activeNgoSectionId: 'musk-foundation-relief',
     displacedEstimate: '650K+ affected civilians',
-    image: asiaAidImg,
+    image: healCampReliefImg,
   },
   {
     id: 'colombia',
@@ -449,6 +475,6 @@ export const CRISIS_COUNTRIES: CrisisCountry[] = [
     urgentNeeds: 'Rural telemedicine Starlink hubs, community protection shelters & youth education grants.',
     activeNgoSectionId: 'starlink-ngo-corps',
     displacedEstimate: '500K+ conflict-affected civilians',
-    image: americasAidImg,
+    image: healShelterMealsImg,
   },
 ];

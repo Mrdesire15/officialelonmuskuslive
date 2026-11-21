@@ -24,6 +24,7 @@ import {
   BellRing,
   UserPlus,
   UserCheck,
+  Wallet,
 } from 'lucide-react';
 import { PageId, PageDefinition } from '../types';
 import { PAGES_CONFIG } from '../data/pagesData';
@@ -53,6 +54,7 @@ interface NavbarProps {
   soundEnabled?: boolean;
   currentUser?: MemberAccountSnapshot | null;
   onOpenAuthModal?: (initialTab?: 'register' | 'signin') => void;
+  memberWalletBalance?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -78,6 +80,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   soundEnabled = true,
   currentUser = null,
   onOpenAuthModal,
+  memberWalletBalance = 0,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const logoTapCountRef = useRef(0);
@@ -373,15 +376,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {currentUser ? (
                     <>
                       <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="max-w-[110px] truncate">
+                      <span className="max-w-[90px] truncate">
                         {currentUser.displayName?.split(' ')[0] || 'Member'}
                       </span>
-                      <span
-                        className={`w-2 h-2 rounded-full ${
-                          currentUser.emailVerified ? 'bg-emerald-400' : 'bg-amber-400'
-                        }`}
-                        aria-hidden="true"
-                      />
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/40 text-[10px] font-mono text-emerald-300 tabular-nums">
+                        <Wallet className="w-2.5 h-2.5" />
+                        <span>
+                          {memberWalletBalance > 0
+                            ? `$${memberWalletBalance.toLocaleString()}`
+                            : 'Wallets'}
+                        </span>
+                      </span>
                     </>
                   ) : (
                     <>
@@ -446,9 +451,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 {currentUser ? (
                   <>
-                    <UserCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-300" />
+                    <Wallet className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-300" />
                     <span className="max-w-[50px] sm:max-w-[72px] truncate">
-                      {currentUser.displayName?.split(' ')[0] || 'Member'}
+                      {memberWalletBalance > 0
+                        ? `$${memberWalletBalance.toLocaleString()}`
+                        : currentUser.displayName?.split(' ')[0] || 'Wallet'}
                     </span>
                   </>
                 ) : (

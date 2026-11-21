@@ -14,7 +14,21 @@ import {
   ArrowLeft,
   Check,
   UserCheck,
+  Wallet,
+  PlusCircle,
+  Clock,
+  Percent,
 } from 'lucide-react';
+import {
+  CompanyWalletRecord,
+  OfficialWalletSymbol,
+  WalletLoadRequest,
+} from '../types';
+import {
+  OFFICIAL_COMPANY_WALLETS,
+  computeMemberWalletStats,
+} from '../data/officialWallets';
+import { OfficialWalletsSelector } from './OfficialWalletsSelector';
 import {
   MemberAccountSnapshot,
   evaluatePasswordSecurity,
@@ -41,6 +55,20 @@ interface MemberAuthModalProps {
   onUserUpdated: (user: MemberAccountSnapshot | null) => void;
   onAccessGranted?: (user: MemberAccountSnapshot, isNewRegistration: boolean) => void;
   onClose: () => void;
+  companyWallets?: CompanyWalletRecord[];
+  walletLoadRequests?: WalletLoadRequest[];
+  memberWalletBalances?: Record<string, number>;
+  onSubmitWalletLoadRequest?: (payload: {
+    walletSymbol: OfficialWalletSymbol;
+    amountUsd: number;
+    txReference: string;
+    note?: string;
+  }) => void;
+  visitorReferralCode?: string;
+  commissionPercent?: number;
+  referralEarnedUsd?: number;
+  referralConversionsCount?: number;
+  onOpenReferralDashboard?: () => void;
 }
 
 export const MemberAuthModal: React.FC<MemberAuthModalProps> = ({
@@ -51,6 +79,15 @@ export const MemberAuthModal: React.FC<MemberAuthModalProps> = ({
   onUserUpdated,
   onAccessGranted,
   onClose,
+  companyWallets = OFFICIAL_COMPANY_WALLETS,
+  walletLoadRequests = [],
+  memberWalletBalances = {},
+  onSubmitWalletLoadRequest,
+  visitorReferralCode = '',
+  commissionPercent = 5,
+  referralEarnedUsd = 0,
+  referralConversionsCount = 0,
+  onOpenReferralDashboard,
 }) => {
   if (!isOpen) return null;
 
@@ -63,6 +100,15 @@ export const MemberAuthModal: React.FC<MemberAuthModalProps> = ({
       onUserUpdated={onUserUpdated}
       onAccessGranted={onAccessGranted}
       onClose={onClose}
+      companyWallets={companyWallets}
+      walletLoadRequests={walletLoadRequests}
+      memberWalletBalances={memberWalletBalances}
+      onSubmitWalletLoadRequest={onSubmitWalletLoadRequest}
+      visitorReferralCode={visitorReferralCode}
+      commissionPercent={commissionPercent}
+      referralEarnedUsd={referralEarnedUsd}
+      referralConversionsCount={referralConversionsCount}
+      onOpenReferralDashboard={onOpenReferralDashboard}
     />
   );
 };
@@ -74,7 +120,37 @@ const MemberAuthModalInner: React.FC<{
   onUserUpdated: (user: MemberAccountSnapshot | null) => void;
   onAccessGranted?: (user: MemberAccountSnapshot, isNewRegistration: boolean) => void;
   onClose: () => void;
-}> = ({ initialTab, gateNotice, currentUser, onUserUpdated, onAccessGranted, onClose }) => {
+  companyWallets: CompanyWalletRecord[];
+  walletLoadRequests: WalletLoadRequest[];
+  memberWalletBalances: Record<string, number>;
+  onSubmitWalletLoadRequest?: (payload: {
+    walletSymbol: OfficialWalletSymbol;
+    amountUsd: number;
+    txReference: string;
+    note?: string;
+  }) => void;
+  visitorReferralCode: string;
+  commissionPercent: number;
+  referralEarnedUsd: number;
+  referralConversionsCount: number;
+  onOpenReferralDashboard?: () => void;
+}> = ({
+  initialTab,
+  gateNotice,
+  currentUser,
+  onUserUpdated,
+  onAccessGranted,
+  onClose,
+  companyWallets,
+  walletLoadRequests,
+  memberWalletBalances,
+  onSubmitWalletLoadRequest,
+  visitorReferralCode,
+  commissionPercent,
+  referralEarnedUsd,
+  referralConversionsCount,
+  onOpenReferralDashboard,
+}) => {
   const [mode, setMode] = useState<'register' | 'signin' | 'reset'>(initialTab);
 
   // Registration, Sign-In, & Recovery fields
@@ -92,6 +168,14 @@ const MemberAuthModalInner: React.FC<{
   const [editNameInput, setEditNameInput] = useState(currentUser?.displayName || '');
   const [isEditingName, setIsEditingName] = useState(false);
 
+  // Personal Wallet Load state
+  const [selectedWalletSymbol, setSelectedWalletSymbol] = useState<OfficialWalletSymbol>('BTC');
+  const [showLoadForm, setShowLoadForm] = useState(false);
+  const [loadAmountUsd, setLoadAmountUsd] = useState<string>('1000');
+  const [loadTxRef, setLoadTxRef] = useState<string>('');
+  const [loadNote, setLoadNote] = useState<string>('');
+  const [loadConfirmKeyword, setLoadConfirmKeyword] = useState<string>('');
+
   // Submission & status feedback states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -99,6 +183,43 @@ const MemberAuthModalInner: React.FC<{
   const [remainingAttempts, setRemainingAttempts] = useState<number>(
     () => getLockoutStatus().remainingAttempts
   );
+
+  const walletStats = computeMemberWalletStats(
+    currentUser?.email,
+    walletLoadRequests,
+    memberWalletBalances
+  );
+
+  const handleWalletLoadSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const numericAmount = Number(loadAmountUsd);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      setErrorMessage('Please enter a valid USD deposit amount greater than $0.');
+      return;
+    }
+    if (!loadTxRef.trim()) {
+      setErrorMessage('Please enter the transaction hash or transfer reference.');
+      return;
+    }
+    if (loadConfirmKeyword.trim() !== 'CONFIRM') {
+      setErrorMessage('Please type CONFIRM in uppercase to finalize your crypto wallet deposit.');
+      return;
+    }
+    setErrorMessage(null);
+    onSubmitWalletLoadRequest?.({
+      walletSymbol: selectedWalletSymbol,
+      amountUsd: Math.round(numericAmount * 100) / 100,
+      txReference: loadTxRef.trim(),
+      note: loadNote.trim() || undefined,
+    });
+    setStatusMessage(
+      `Wallet funding request of $${numericAmount.toLocaleString()} (${selectedWalletSymbol}) submitted for payment approval. Funds credit to your balance once approved.`
+    );
+    setLoadTxRef('');
+    setLoadNote('');
+    setLoadConfirmKeyword('');
+    setShowLoadForm(false);
+  };
 
   const passwordReport = evaluatePasswordSecurity(password, email, displayName);
   const passwordsMatch = password.length > 0 && password === confirmPassword;
@@ -319,7 +440,7 @@ const MemberAuthModalInner: React.FC<{
       aria-modal="true"
       aria-labelledby="member-auth-modal-title"
     >
-      <div className="w-full max-w-lg rounded-2xl bg-[#061024] border border-blue-500/45 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] my-auto">
+      <div className={`w-full ${currentUser ? 'max-w-2xl' : 'max-w-lg'} rounded-2xl bg-[#061024] border border-blue-500/45 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] my-auto`}>
         {/* Patriotic Top Accent */}
         <div className="h-[2px] w-full us-flag-strip" />
 
@@ -463,6 +584,245 @@ const MemberAuthModalInner: React.FC<{
                   </div>
                 )}
               </div>
+
+              {/* Personal Wallet Balance & Payment Approval Summary */}
+              <div className="p-4 rounded-xl bg-[#08142b] border border-emerald-500/40 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300 font-bold flex items-center gap-1.5">
+                      <Wallet className="w-3.5 h-3.5" />
+                      <span>Personal Account Wallet Balance</span>
+                    </div>
+                    <div className="flex flex-wrap items-baseline gap-3 mt-1">
+                      <span className="font-display font-black text-2xl text-white font-mono tabular-nums">
+                        ${walletStats.approvedBalanceUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                      </span>
+                      {walletStats.pendingBalanceUsd > 0 && (
+                        <span className="text-[11px] font-mono text-amber-300 tabular-nums">
+                          (${walletStats.pendingBalanceUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pending approval)
+                        </span>
+                      )}
+                      {walletStats.heldBalanceUsd > 0 && (
+                        <span className="text-[11px] font-mono text-red-300 tabular-nums">
+                          (${walletStats.heldBalanceUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} on hold)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Money loaded on your personal wallets is released for checkout after individual management payment approval.
+                    </p>
+                  </div>
+
+                  {onSubmitWalletLoadRequest && (
+                    <button
+                      type="button"
+                      onClick={() => setShowLoadForm((prev) => !prev)}
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-red-600 hover:brightness-110 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0 shadow"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      <span>{showLoadForm ? 'Hide Deposit Form' : 'Load Money to Wallet'}</span>
+                    </button>
+                  )}
+                </div>
+
+                {showLoadForm && onSubmitWalletLoadRequest && (
+                  <form
+                    onSubmit={handleWalletLoadSubmit}
+                    className="p-3.5 rounded-xl bg-[#040a18] border border-blue-900/70 space-y-3"
+                  >
+                    <div className="text-xs font-bold text-white">
+                      Submit Wallet Deposit for Payment Approval
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-300 block">
+                          Personal Wallet Currency
+                        </label>
+                        <select
+                          value={selectedWalletSymbol}
+                          onChange={(e) => setSelectedWalletSymbol(e.target.value as OfficialWalletSymbol)}
+                          className="w-full px-3 py-2 text-xs bg-[#08142b] border border-blue-900/70 rounded-lg text-white font-mono focus:outline-none focus:border-blue-400"
+                        >
+                          {companyWallets
+                            .filter((w) => w.enabled)
+                            .map((w) => (
+                              <option key={w.symbol} value={w.symbol}>
+                                {w.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-300 block">
+                          USD Amount Loaded ($)
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          step="0.01"
+                          required
+                          value={loadAmountUsd}
+                          onChange={(e) => setLoadAmountUsd(e.target.value)}
+                          className="w-full px-3 py-2 text-xs bg-[#08142b] border border-blue-900/70 rounded-lg text-white font-mono tabular-nums focus:outline-none focus:border-blue-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-300 block">
+                          Transaction Hash / Reference *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={loadTxRef}
+                          onChange={(e) => setLoadTxRef(e.target.value)}
+                          placeholder="Paste blockchain TxID or transfer ref..."
+                          className="w-full px-3 py-2 text-xs bg-[#08142b] border border-blue-900/70 rounded-lg text-white font-mono focus:outline-none focus:border-blue-400"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-300 block">
+                          Note (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={loadNote}
+                          onChange={(e) => setLoadNote(e.target.value)}
+                          placeholder="e.g. For Cybertruck order / VIP card"
+                          className="w-full px-3 py-2 text-xs bg-[#08142b] border border-blue-900/70 rounded-lg text-white focus:outline-none focus:border-blue-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-1">
+                        <input
+                          type="text"
+                          value={loadConfirmKeyword}
+                          onChange={(e) => setLoadConfirmKeyword(e.target.value)}
+                          aria-label="Type CONFIRM to finalize wallet deposit"
+                          placeholder="Type CONFIRM to finalize..."
+                          className={`flex-1 px-3 py-2 text-xs bg-[#08142b] border rounded-lg font-mono tracking-wider text-white placeholder:text-slate-500 focus:outline-none ${
+                            loadConfirmKeyword.trim() === 'CONFIRM'
+                              ? 'border-emerald-500/70 focus:border-emerald-400'
+                              : 'border-amber-500/45 focus:border-blue-400'
+                          }`}
+                        />
+                        <span
+                          className={`text-[10px] font-mono whitespace-nowrap ${
+                            loadConfirmKeyword.trim() === 'CONFIRM'
+                              ? 'text-emerald-300 font-bold'
+                              : 'text-amber-300/90'
+                          }`}
+                        >
+                          {loadConfirmKeyword.trim() === 'CONFIRM' ? 'Ready' : 'Type CONFIRM'}
+                        </span>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={loadConfirmKeyword.trim() !== 'CONFIRM'}
+                        className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-45 disabled:cursor-not-allowed text-white text-xs font-bold cursor-pointer whitespace-nowrap"
+                      >
+                        Confirm Payment &amp; Submit
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+
+              {/* Member Individual Referral Dashboard Quick Card */}
+              {onOpenReferralDashboard && (
+                <div className="p-4 rounded-xl bg-[#08142b] border border-blue-500/40 flex flex-wrap items-center justify-between gap-3">
+                  <div className="space-y-0.5 min-w-0">
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-blue-300 font-bold flex items-center gap-1.5">
+                      <Percent className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Individual Referral Dashboard · {commissionPercent}% Partner Rate</span>
+                    </div>
+                    <div className="text-xs text-slate-200 font-mono tabular-nums">
+                      Code: <strong className="text-white">{visitorReferralCode || 'Active'}</strong> ·{' '}
+                      Earned:{' '}
+                      <strong className="text-emerald-300">
+                        ${referralEarnedUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </strong>{' '}
+                      · {referralConversionsCount} {referralConversionsCount === 1 ? 'conversion' : 'conversions'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onOpenReferralDashboard}
+                    className="px-3.5 py-2 rounded-xl bg-blue-600/25 border border-blue-400/60 hover:bg-blue-600/40 text-blue-100 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap"
+                  >
+                    <Percent className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Open Referral Dashboard</span>
+                  </button>
+                </div>
+              )}
+
+              {/* All 9 Official Wallets Shown as Visitor Personal Wallet Addresses */}
+              <OfficialWalletsSelector
+                wallets={companyWallets}
+                selectedSymbol={selectedWalletSymbol}
+                onSelectSymbol={setSelectedWalletSymbol}
+                mode="personal"
+              />
+
+              {/* Visitor's Recent Wallet Load Requests & Approval Status */}
+              {walletStats.memberRequests.length > 0 && (
+                <div className="p-4 rounded-xl bg-[#040a18] border border-blue-900/60 space-y-2.5">
+                  <div className="text-[11px] font-mono uppercase tracking-wider text-blue-300 font-bold">
+                    Personal Wallet Loads &amp; Payment Approval Log ({walletStats.memberRequests.length})
+                  </div>
+                  <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                    {walletStats.memberRequests.map((req) => (
+                      <div
+                        key={req.id}
+                        className="p-2.5 rounded-lg bg-[#08142b] border border-blue-900/60 flex flex-wrap items-center justify-between gap-2 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-mono font-bold text-white tabular-nums">
+                            ${req.amountUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+                            <span className="text-blue-300">({req.walletSymbol})</span>
+                          </div>
+                          <div className="text-[10px] font-mono text-slate-400 truncate">
+                            Ref: {req.txReference} · {req.timeStr}
+                          </div>
+                          {req.adminNotes && (
+                            <div className="text-[10px] text-blue-200 mt-0.5">
+                              Note: {req.adminNotes}
+                            </div>
+                          )}
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase shrink-0 border ${
+                            req.status === 'approved'
+                              ? 'bg-emerald-500/15 border-emerald-500/45 text-emerald-300'
+                              : req.status === 'held'
+                              ? 'bg-amber-500/15 border-amber-500/45 text-amber-300'
+                              : req.status === 'rejected'
+                              ? 'bg-red-500/15 border-red-500/45 text-red-300'
+                              : 'bg-blue-500/15 border-blue-500/45 text-blue-200 flex items-center gap-1'
+                          }`}
+                        >
+                          {req.status === 'pending_approval' && <Clock className="w-2.5 h-2.5" />}
+                          <span>
+                            {req.status === 'approved'
+                              ? 'Approved'
+                              : req.status === 'held'
+                              ? 'On Hold'
+                              : req.status === 'rejected'
+                              ? 'Rejected'
+                              : 'Pending Approval'}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex items-center justify-between gap-3 pt-2 border-t border-blue-900/60">
